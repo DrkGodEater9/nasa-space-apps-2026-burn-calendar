@@ -81,7 +81,7 @@ git push origin delivery-final
 
 ## 6. Mensajes de commit
 
-Cortos y en presente, con el área al inicio:
+Siempre en inglés, simples y cortos. En presente, con el área al inicio:
 
 ```text
 data: add FIRMS API fetch script with cache
