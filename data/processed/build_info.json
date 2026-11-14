@@ -1,0 +1,61 @@
+{
+  "mask_cells": 3745,
+  "filter_report": [
+    {
+      "sensor": "MODIS_C61",
+      "total": 659585,
+      "dropped_low_confidence": 32342,
+      "dropped_type_not_0": 9017,
+      "dropped_static_mask": 47,
+      "kept_detections": 618179
+    },
+    {
+      "sensor": "VIIRS_N20",
+      "total": 868547,
+      "dropped_low_confidence": 54364,
+      "dropped_type_not_0": 37261,
+      "dropped_static_mask": 1067,
+      "kept_detections": 775855
+    },
+    {
+      "sensor": "VIIRS_N21",
+      "total": 316170,
+      "dropped_low_confidence": 20100,
+      "dropped_type_not_0": 13021,
+      "dropped_static_mask": 1173,
+      "kept_detections": 281876
+    },
+    {
+      "sensor": "VIIRS_SNPP",
+      "total": 1627104,
+      "dropped_low_confidence": 96057,
+      "dropped_type_not_0": 56867,
+      "dropped_static_mask": 922,
+      "kept_detections": 1473258
+    }
+  ],
+  "cells_outside_polygons": 3505,
+  "ai_note": "Built by scripts/build_dataset.py, written with the help of an AI assistant (Claude Code), implementing the method decided by the Horum Labs team in docs/METHOD.md.",
+  "built_utc": "2026-11-14T16:26:36.595390+00:00",
+  "parameters": {
+    "cell_degrees": 0.01,
+    "timezone": "UTC-5",
+    "modis_first_date": "2003-01-01",
+    "mask_min_months": 7,
+    "window_days": 7,
+    "season_half_width_days": 15,
+    "min_baseline_active_days": 10,
+    "min_cells_for_alert": 3,
+    "max_missing_days_in_window": 3,
+    "boundaries": "DANE MGN 2018 (data/processed/dane_mgn2018_municipios.geojson)"
+  },
+  "reference_range": [
+    "2012-01-20",
+    "2026-11-13"
+  ],
+  "reference_days": {
+    "snpp": 5332,
+    "n20_fill": 75,
+    "no_data": 5
+  }
+}

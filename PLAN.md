@@ -1,174 +1,176 @@
-# Plan de trabajo - NASA Space Apps 2026
+# Work plan - NASA Space Apps 2026
 
-Reto: Harmonization of MODIS and VIIRS Hot Spots
-Equipo: Horum Labs | Sede: Ipiales (virtual) | Hackathon: 14 y 15 de noviembre de 2026
+Challenge: Harmonization of MODIS and VIIRS Hot Spots
+Team: Horum Labs | Site: Ipiales (virtual) | Hackathon: November 14 and 15, 2026
 
-Este documento es el plan unico para los tres. Se sigue por pasos, en orden. Cada paso dice que hacer, quien lo lidera y cuando se considera terminado.
+This is the single plan for the three of us. Follow it step by step, in order. Each step says what to do, who leads it, and when it counts as done.
 
-## 0. Reglas que no se pueden olvidar
+*Translated to English from the original Spanish plan. Checkmarks for the data work were added on November 14, 2026 (see the notes after each step).*
 
-- Entrega: abre el sabado 14 a las 9:00 a.m. y cierra el domingo 15 a las 11:59 p.m. (hora de Ipiales). Meta interna: enviar antes de las 6:00 p.m. del domingo.
-- Demo obligatorio: video de maximo 30 segundos o maximo 7 diapositivas, en un enlace publico sin login. Si el video va en espanol, debe llevar subtitulos en ingles.
-- La pagina del proyecto y todo lo enlazado debe estar en ingles.
-- Hay que usar al menos un dato NASA y listar TODO lo externo (codigo, librerias, textos, imagenes) en las referencias.
-- IA: se puede usar para acelerar el trabajo (codigo, depuracion, redaccion), pero NO para idear como resolver el reto. El enfoque y el metodo de armonizacion lo decidimos nosotros tres. Hay que declarar el uso de IA y dejar notas en el codigo, los datos y las imagenes (marca de agua en imagenes generadas).
-- No se usan logos ni simbolos de NASA en contenido generado.
-- Los tres deben estar en la misma sede (Ipiales), no estar en lista de espera y aparecer en la pestana Members del equipo.
-- Nunca se suben al repositorio: claves (MAP_KEY), contrasenas, correos personales ni datos originales pesados.
+## 0. Rules we cannot forget
 
-## 1. Roles y acuerdos (reunion de 20 minutos)
+- Submission: opens Saturday the 14th at 9:00 a.m. and closes Sunday the 15th at 11:59 p.m. (Ipiales time). Internal goal: submit before 6:00 p.m. on Sunday.
+- Demo is mandatory: a video of at most 30 seconds or at most 7 slides, on a public link with no login. If the video is in Spanish, it must have English subtitles.
+- The project page and everything linked from it must be in English.
+- At least one NASA dataset must be used, and EVERYTHING external (code, libraries, texts, images) must be listed in the references.
+- AI: it may be used to speed up the work (code, debugging, writing), but NOT to come up with how to solve the challenge. The approach and the harmonization method are decided by the three of us. AI use must be declared, with notes in the code, the data and the images (a watermark on generated images).
+- No NASA logos or symbols in generated content.
+- All three must be on the same site (Ipiales), not on the waiting list, and appear in the Members tab of the team.
+- Never upload to the repository: keys (MAP_KEY), passwords, personal emails, or heavy original data.
 
-Roles, que rotan segun haga falta:
-- Datos: descarga, limpieza, armonizacion y validacion.
-- Web: mapa, calendario, descarga de CSV y publicacion.
-- Entrega: pagina del proyecto, demo, referencias, declaracion de IA y revision final.
+## 1. Roles and agreements (20-minute meeting)
 
-Acordar:
-- [ ] Quien lleva cada rol.
-- [ ] Canal de comunicacion y horas de sincronizacion (15 minutos cada 3 o 4 horas).
-- [ ] Una rama de Git por rol: data, web, delivery. Commits frecuentes.
-- [ ] Region de trabajo: Colombia completa, con un departamento de prueba (por ejemplo Meta o Vichada).
-- [ ] Contrato de datos: columnas y formato del archivo que Datos le entrega a Web, con un archivo de ejemplo en la carpeta data/sample.
+Roles, which rotate as needed:
+- Data: download, cleaning, harmonization and validation.
+- Web: map, calendar, CSV download and publishing.
+- Delivery: project page, demo, references, AI declaration and final review.
 
-Terminado cuando: los tres saben su rol y el archivo de ejemplo existe.
+Agree on:
+- [ ] Who takes each role.
+- [ ] Communication channel and sync times (15 minutes every 3 or 4 hours).
+- [ ] One Git branch per role: data, web, delivery. Frequent commits.
+- [ ] Work region: all of Colombia, with one test department (for example Meta or Vichada). *Chosen for the sample: Nariño (code 52).*
+- [x] Data contract: columns and format of the file that Data gives to Web, with an example file in the data/sample folder. *See [docs/DATA_CONTRACT.md](docs/DATA_CONTRACT.md) and `data/sample/`.*
 
-## 2. Accesos y herramientas
+Done when: all three know their role and the example file exists.
 
-- [ ] Cada uno tiene cuenta de NASA Earthdata Login (opcional para los demas, obligatoria para quien pida el archivo).
-- [ ] MAP_KEY de FIRMS solicitada. Se guarda fuera del repositorio. Limite: 5000 consultas cada 10 minutos.
-- [ ] Python con entorno virtual y librerias de datos (pandas, duckdb, pyarrow, geopandas, requests).
-- [ ] Proyecto web creado en la rama web.
-- [ ] Los tres son colaboradores del repositorio.
-- [ ] Todos unidos al grupo de WhatsApp de Ipiales.
-- [ ] Archivo REFERENCES.md creado, con FIRMS, MODIS, VIIRS, DANE e IDEAM.
+## 2. Access and tools
 
-Terminado cuando: Datos puede hacer una consulta de prueba a la API y recibir filas.
+- [ ] Each person has a NASA Earthdata Login account (optional for the others, mandatory for whoever requests the archive).
+- [x] FIRMS MAP_KEY requested. It is kept outside the repository (`.env`, ignored by Git). Limit: 5000 requests every 10 minutes.
+- [x] Python with a virtual environment and data libraries (pandas, duckdb, pyarrow, geopandas, requests).
+- [ ] Web project created on the web branch.
+- [ ] All three are collaborators on the repository.
+- [ ] Everyone joined the Ipiales WhatsApp group.
+- [x] REFERENCES.md created, with FIRMS, MODIS, VIIRS, DANE and IDEAM.
 
-## 3. Conseguir los datos de FIRMS
+Done when: Data can make a test query to the API and receive rows. *Done.*
 
-Fuentes (nombres de la API): MODIS_SP, VIIRS_SNPP_SP, VIIRS_NOAA20_SP, VIIRS_NOAA21_SP. Las versiones _NRT son mas recientes y se reemplazan despues.
+## 3. Getting the FIRMS data
 
-Cobertura del archivo historico:
-- MODIS Collection 6.1: desde el 1 de noviembre de 2000.
-- VIIRS S-NPP (375 m): desde el 20 de enero de 2012.
-- VIIRS NOAA-20: desde el 1 de abril de 2018.
-- VIIRS NOAA-21: desde el 1 de marzo de 2023.
+Sources (API names): MODIS_SP, VIIRS_SNPP_SP, VIIRS_NOAA20_SP, VIIRS_NOAA21_SP. The _NRT versions are more recent and get replaced later.
 
-Pasos:
-- [ ] Pedir el archivo historico en la pagina Archive Download de FIRMS: area de Colombia (recuadro aproximado oeste -79.5, sur -4.5, este -66.5, norte 12.8), todos los sensores, todas las fechas, formato CSV. Llega por correo.
-- [ ] Mientras llega, probar la API por area con 5 dias (la API solo permite de 1 a 5 dias por consulta).
-- [ ] Completar los ultimos dias recientes por API cuando el archivo no los cubra.
-- [ ] Guardar los originales en data/raw (esta carpeta NO se sube a GitHub) y trabajar sobre copias.
-- [ ] Descargar los limites de departamentos y municipios del DANE (Marco Geoestadistico Nacional) para recortar a Colombia.
+Coverage of the historical archive:
+- MODIS Collection 6.1: from November 1, 2000.
+- VIIRS S-NPP (375 m): from January 20, 2012.
+- VIIRS NOAA-20: from April 1, 2018.
+- VIIRS NOAA-21: from March 1, 2023.
 
-Terminado cuando: hay archivos de MODIS y VIIRS para Colombia en data/raw y los limites del DANE descargados.
+Steps:
+- [x] Request the historical archive on the FIRMS Archive Download page: Colombia area (approximate box west -79.5, south -4.5, east -66.5, north 12.8), all sensors, all dates, CSV format. It arrives by email.
+- [x] While it arrives, test the API by area with 5 days (the API only allows 1 to 5 days per request).
+- [x] Complete the most recent days through the API when the archive does not cover them. *The `*_NRT` sources were added to `scripts/download_firms.py`; the pipeline reads those chunks.*
+- [x] Keep the originals in data/raw (this folder is NOT uploaded to GitHub) and work on copies.
+- [x] Download the department and municipality boundaries from DANE (Marco Geoestadístico Nacional) to clip to Colombia.
 
-## 4. Conocer los datos
+Done when: there are MODIS and VIIRS files for Colombia in data/raw and the DANE boundaries are downloaded. *Done.*
 
-Responder con numeros y graficos simples:
-- [ ] Que columnas trae cada sensor y como se expresa la confianza de cada deteccion.
-- [ ] Cuantos focos hay por ano y por sensor.
-- [ ] Hay huecos de fechas o periodos sin datos.
-- [ ] Cuantos puntos caen fuera de Colombia.
-- [ ] Que diferencias visibles hay entre MODIS y VIIRS en los anos donde ambos existen.
+## 4. Getting to know the data
 
-Terminado cuando: hay un cuaderno o script con estas respuestas, para discutirlas con el equipo.
+Answer with numbers and simple charts:
+- [x] Which columns each sensor has and how the confidence of each detection is expressed.
+- [x] How many hot spots per year and per sensor.
+- [x] Whether there are date gaps or periods without data.
+- [x] How many points fall outside Colombia.
+- [x] What visible differences there are between MODIS and VIIRS in the years where both exist.
 
-## 5. Decidir el metodo de armonizacion (los tres juntos)
+Done when: there is a notebook or script with these answers, to discuss with the team. *Done: `notebooks/01_explore_firms.ipynb`.*
 
-Esta decision es del equipo. Se toma con lo aprendido en el paso 4 y se escribe en docs/METHOD.md con nuestras propias palabras y el porque de cada eleccion.
+## 5. Deciding the harmonization method (the three of us together)
 
-Preguntas que hay que resolver:
-- [ ] Que filtros de calidad se aplican.
-- [ ] A que escala espacial y temporal se agrupan los puntos.
-- [ ] Como se hace comparable el conteo entre sensores.
-- [ ] Como se trata el periodo en que solo existe MODIS.
-- [ ] Como se comunica la incertidumbre.
+This decision belongs to the team. It is made with what was learned in step 4 and written in docs/METHOD.md in our own words, with the reason for each choice.
 
-Terminado cuando: docs/METHOD.md existe, los tres lo leyeron y estan de acuerdo.
+Questions to settle:
+- [x] Which quality filters are applied.
+- [x] At what spatial and temporal scale the points are grouped.
+- [x] How the count is made comparable between sensors.
+- [x] How the period when only MODIS exists is treated.
+- [x] How uncertainty is communicated.
 
-## 6. Implementar y validar la armonizacion
+Done when: docs/METHOD.md exists, all three read it and agree. *The document exists. Still open: the three of you read it and confirm the defaults listed at its end.*
 
-- [ ] Script reproducible que regenera todo desde data/raw.
-- [ ] Recorte con los limites oficiales del DANE.
-- [ ] Archivo final compacto (Parquet o JSON) siguiendo el contrato del paso 1.
-- [ ] Validacion: comparar totales por departamento contra los reportes semestrales del IDEAM y anotar donde difieren y por que. Nota: el IDEAM aclara que los focos de calor no son comparables con los registros de campo.
-- [ ] Nota en el codigo y los datos sobre que partes se hicieron con ayuda de IA.
+## 6. Implement and validate the harmonization
 
-Terminado cuando: Web puede leer el archivo final y las cifras tienen sentido frente al IDEAM.
+- [x] Reproducible script that regenerates everything from data/raw. *`scripts/build_dataset.py`, checked by `scripts/check_dataset.py`.*
+- [x] Clipping with the official DANE boundaries.
+- [x] Compact final file (Parquet or JSON) following the contract from step 1.
+- [x] Validation: compare totals by department against the IDEAM semester reports and note where they differ and why. Note: IDEAM clarifies that hot spots are not comparable with field records. *Done at semester level, because IDEAM publishes no monthly figures: see [docs/VALIDATION.md](docs/VALIDATION.md).*
+- [x] Note in the code and the data about which parts were done with AI help.
 
-## 7. Web - version minima (MVP)
+Done when: Web can read the final file and the figures make sense against IDEAM. *The data side is done.*
 
-Esto se construye en paralelo desde el paso 2 con datos de ejemplo.
-- [ ] Mapa con herramienta para dibujar el area de interes.
-- [ ] Campos de latitud y longitud como alternativa.
-- [ ] Selector de rango de fechas.
-- [ ] Calendario de actividad con escala de color accesible.
-- [ ] Descarga de CSV de lo consultado.
-- [ ] Texto corto en la web que explique el metodo.
+## 7. Web - minimum version (MVP)
 
-Terminado cuando: un usuario nuevo puede elegir un area y fechas y ver el calendario sin ayuda.
+This is built in parallel from step 2 with sample data.
+- [ ] Map with a tool to draw the area of interest.
+- [ ] Latitude and longitude fields as an alternative.
+- [ ] Date range selector.
+- [ ] Activity calendar with an accessible color scale.
+- [ ] CSV download of what was queried.
+- [ ] Short text on the web explaining the method.
 
-## 8. Web - funciones del reto
+Done when: a new user can pick an area and dates and see the calendar without help.
 
-- [ ] Comparar el mes actual contra el historial (mediana) del area elegida.
-- [ ] Mostrar que meses y anos tuvieron mas actividad.
-- [ ] Marcar dias con actividad inusual para esa zona y epoca.
-- [ ] Avisar donde hay pocos datos o huecos.
-- [ ] Revisar contraste de colores, uso en celular y velocidad de carga.
+## 8. Web - challenge features
 
-Terminado cuando: todo lo anterior funciona con los datos reales.
+- [ ] Compare the current month against the history (median) of the chosen area.
+- [ ] Show which months and years had the most activity.
+- [ ] Mark days with unusual activity for that zone and season.
+- [ ] Warn where there is little data or there are gaps.
+- [ ] Check color contrast, mobile use and loading speed.
 
-## 9. Publicar
+Done when: all of the above works with the real data.
 
-- [ ] Desplegar la web en un servicio gratuito, con enlace publico y sin login.
-- [ ] Probar el enlace en una ventana privada.
-- [ ] Pedir la clasificacion de FortiGuard del sitio (recomendado por la guia) para que los jueces puedan abrirlo.
-- [ ] README en ingles con: que hace, como correrlo, de donde vienen los datos y como regenerarlos.
+## 9. Publish
 
-Terminado cuando: cualquiera puede abrir el enlace sin cuenta.
+- [ ] Deploy the web on a free service, with a public link and no login.
+- [ ] Test the link in a private window.
+- [ ] Request the FortiGuard classification of the site (recommended by the guide) so the judges can open it.
+- [ ] README in English with: what it does, how to run it, where the data comes from and how to regenerate it.
 
-## 10. Entrega (Entrega lidera, todos revisan)
+Done when: anyone can open the link without an account.
 
-En Space Apps: foto de perfil, My Team, pestana Project. Guardar seguido con Save Progress y usar el candado de edicion para no pisarse.
+## 10. Submission (Delivery leads, everyone reviews)
 
-Campos:
+On Space Apps: profile picture, My Team, Project tab. Save often with Save Progress and use the edit lock so you do not overwrite each other.
+
+Fields:
 - [ ] Project Name.
-- [ ] High-Level Summary (en ingles).
-- [ ] Link to Project Demo: video de 30 segundos o 7 diapositivas, enlace publico.
-- [ ] Link to Final Project: la web publicada.
-- [ ] Detailed Description (en ingles): que hace, como funciona, beneficios, herramientas.
-- [ ] Use of Super Intelligence (SI): como se uso la IA.
-- [ ] NASA Data: FIRMS (MODIS y VIIRS), con detalle.
-- [ ] Space Agency Partner Data and Other References: todo lo externo, incluido el codigo abierto y los datos de DANE e IDEAM.
-- [ ] Marcar los dos recuadros de aceptacion.
-- [ ] Pulsar Submit (no basta con Save Progress).
+- [ ] High-Level Summary (in English).
+- [ ] Link to Project Demo: 30-second video or 7 slides, public link.
+- [ ] Link to Final Project: the published web.
+- [ ] Detailed Description (in English): what it does, how it works, benefits, tools.
+- [ ] Use of Super Intelligence (SI): how AI was used.
+- [ ] NASA Data: FIRMS (MODIS and VIIRS), with detail.
+- [ ] Space Agency Partner Data and Other References: everything external, including open source code and the DANE and IDEAM data.
+- [ ] Tick the two acceptance boxes.
+- [ ] Press Submit (Save Progress is not enough).
 
-## 11. Revision final antes de enviar
+## 11. Final review before sending
 
-- [ ] Los enlaces del demo y del proyecto abren en ventana privada.
-- [ ] Todo el texto esta en ingles.
-- [ ] El video tiene subtitulos en ingles si esta en espanol.
-- [ ] Las referencias estan completas.
-- [ ] La declaracion de IA esta completa y hay marcas en imagenes, codigo y datos.
-- [ ] Los tres aparecen en Members y ninguno esta en lista de espera.
-- [ ] Se envio antes de las 6:00 p.m. del domingo.
+- [ ] The demo and project links open in a private window.
+- [ ] All text is in English.
+- [ ] The video has English subtitles if it is in Spanish.
+- [ ] The references are complete.
+- [ ] The AI declaration is complete and there are marks on images, code and data.
+- [ ] All three appear in Members and none is on the waiting list.
+- [ ] Sent before 6:00 p.m. on Sunday.
 
-## 12. Plan B si algo falla
+## 12. Plan B if something fails
 
-- El correo con los datos no llega: avanzar con la API sobre un periodo corto y ampliar despues.
-- La armonizacion se complica: entregar una version simple, bien explicada y con sus limites claros.
-- Falta tiempo: el minimo es mapa, calendario y CSV. Todo lo demas es extra.
-- El enlace de la web falla: dejar el repositorio con instrucciones de ejecucion y un video del funcionamiento.
+- The email with the data does not arrive: move forward with the API over a short period and extend later.
+- The harmonization gets complicated: deliver a simple version, well explained and with clear limits.
+- Time runs short: the minimum is map, calendar and CSV. Everything else is extra.
+- The web link fails: leave the repository with run instructions and a video of it working.
 
-## 13. Linea de tiempo
+## 13. Timeline
 
-Sabado 14:
-- Manana: pasos 1, 2 y 3. Se pide el archivo de FIRMS. Web arranca con datos de ejemplo.
-- Tarde: pasos 4 y 5. Web avanza el calendario.
-- Noche: primer calendario con datos reales, de extremo a extremo.
+Saturday 14:
+- Morning: steps 1, 2 and 3. Request the FIRMS archive. Web starts with sample data.
+- Afternoon: steps 4 and 5. Web advances the calendar.
+- Night: first calendar with real data, end to end.
 
-Domingo 15:
-- Manana: pasos 6 y 8. Validacion, comparacion con el historial, CSV.
-- Mediodia: congelar funciones nuevas. Solo corregir errores. Paso 9.
-- Tarde: pasos 10 y 11. Demo, textos y envio antes de las 6:00 p.m.
+Sunday 15:
+- Morning: steps 6 and 8. Validation, comparison with the history, CSV.
+- Midday: freeze new features. Only fix errors. Step 9.
+- Afternoon: steps 10 and 11. Demo, texts and submission before 6:00 p.m.

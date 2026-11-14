@@ -43,6 +43,12 @@ SOURCE_START = {
     "VIIRS_SNPP_SP": date(2012, 1, 20),
     "VIIRS_NOAA20_SP": date(2018, 4, 1),
     "VIIRS_NOAA21_SP": date(2023, 3, 1),
+    # Near-real-time sources: use these for the most recent days that the archive does not cover yet.
+    # The API only serves recent days for them; older requests return nothing or an error.
+    "MODIS_NRT": date(2000, 11, 1),
+    "VIIRS_SNPP_NRT": date(2012, 1, 20),
+    "VIIRS_NOAA20_NRT": date(2018, 4, 1),
+    "VIIRS_NOAA21_NRT": date(2023, 3, 1),
 }
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
