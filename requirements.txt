@@ -1,0 +1,7 @@
+pandas
+requests
+pyarrow
+duckdb
+geopandas
+matplotlib
+jupyter

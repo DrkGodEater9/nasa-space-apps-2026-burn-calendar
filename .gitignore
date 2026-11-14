@@ -218,3 +218,9 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# --- Project data (raw data and secrets never go to GitHub) ---
+.env
+.env.*
+!.env.example
+data/raw/
