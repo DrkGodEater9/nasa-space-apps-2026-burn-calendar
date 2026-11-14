@@ -2,7 +2,7 @@
 
 These are the decisions of the Horum Labs team. The choices and their reasons are ours.
 
-*AI note: Claude Code only transcribed and formatted this document from the team's text, and checked against the CSV files that the `type` and `confidence` columns exist as described. It did not propose the method. The "Implementation decisions" section at the end lists defaults that were filled in while writing the code, because the team text left them open. They need team confirmation.*
+*AI note: Claude Code only transcribed and formatted this document from the team's text, and checked against the CSV files that the `type` and `confidence` columns exist as described. It did not propose the method. The "Implementation decisions" section at the end lists defaults that were filled in while writing the code, because the team text left them open. A team member confirmed them as they are on November 14, 2026.*
 
 ## 1. Quality
 
@@ -77,9 +77,9 @@ Current month: compared with the median of the same month in the history, showin
 - **Hand-drawn polygon:** the municipalities with at least 25% of their area inside the polygon are used. The list of municipalities and the percentage covered are always shown.
 - **Nariño:** Galeras is left out by the mask. Municipalities without enough history use the department fallback. The daily calendar is shown, but alerts come from the monthly or department level.
 
-## Implementation decisions (defaults chosen while coding, pending team confirmation)
+## Implementation decisions (confirmed)
 
-The team text left these open. The code uses the defaults below and they are written into `data/processed/build_info.json`.
+The team text left these open. The AI proposed the defaults below while writing the code, and a team member reviewed and **confirmed all ten as they are on November 14, 2026**. They are the team's decisions now. The other two members should still read this document (PLAN.md, step 5). The code uses these values and they are written into `data/processed/build_info.json`.
 
 1. **MODIS confidence classes:** below 30 is low (discarded), 30-79 nominal, 80-100 high. This follows the usual FIRMS convention.
 2. **Static-source mask:** built from archive detections of all four sensors combined, after the quality filters (`type = 0`, not low confidence). A cell is in the mask if, in any calendar year, it had detections in at least 7 distinct months (more than 50% of 12), or if it ever had `type` 1, 2 or 3 in the archive. Types 1 and 3 were added after the first build showed that Galeras (a volcano, `type = 1`) was not covered by `type = 2` alone. The mask is applied to NRT data only, as decided.

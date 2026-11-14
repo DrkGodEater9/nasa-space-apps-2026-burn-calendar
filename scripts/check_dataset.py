@@ -94,6 +94,31 @@ def main() -> None:
         full = full[full[key].str.startswith("52")]
         check(len(s) == len(full) and list(s.columns) == list(full.columns), f"sample_{name} equals the department-52 slice of the full table")
 
+    # web JSON must carry exactly what the tables carry (skipped when scripts/export_web_json.py has not run)
+    web = P / "web"
+    if (web / "manifest.json").exists():
+        import json
+        man = json.loads((web / "manifest.json").read_text(encoding="utf-8"))
+        check(len(man["departments"]) == 33 and all((web / d["file"]).exists() for d in man["departments"]), "web JSON: 33 department files exist")
+        base = pd.Timestamp(man["day_base"])
+        total_cells = total_alerts = total_months = 0
+        for d in man["departments"]:
+            j = json.loads((web / d["file"]).read_text(encoding="utf-8"))
+            total_cells += sum(j["daily"]["c"])
+            total_alerts += len(j["alerts"]["c"])
+            total_months += len(j["monthly"]["cd"])
+        check(total_cells == int(ref["active_cells"].sum()), "web JSON: daily cells add up to the reference series")
+        check(total_alerts == len(an_m) and total_months == len(mo_m), "web JSON: alert and month rows match the tables")
+        j52 = json.loads((web / "departments" / "52.json").read_text(encoding="utf-8"))
+        codes52 = [m["code"] for m in j52["municipalities"]]
+        rebuilt = pd.DataFrame({"mpio_code": [codes52[i] for i in j52["daily"]["m"]],
+                                "date": [(base + pd.Timedelta(days=int(x))).date() for x in j52["daily"]["d"]],
+                                "active_cells": j52["daily"]["c"]}).sort_values(["mpio_code", "date"]).reset_index(drop=True)
+        orig = ref[ref["mpio_code"].str.startswith("52")][["mpio_code", "date", "active_cells"]].sort_values(["mpio_code", "date"]).reset_index(drop=True)
+        check(rebuilt.equals(orig), "web JSON: department 52 daily series decodes to the exact table rows")
+        st = json.loads((web / "status.json").read_text(encoding="utf-8"))
+        check(len(st["status"]) == len(status), "web JSON: status has one code per reference day")
+
     print()
     if failures:
         print(f"{len(failures)} check(s) failed")

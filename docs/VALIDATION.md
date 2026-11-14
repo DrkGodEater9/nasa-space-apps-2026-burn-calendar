@@ -58,6 +58,18 @@ An earlier comparison that used only the text of the reports showed Casanare 202
 
 ## Open points
 
-1. Caquetá 2024 (-14.2% and -8.0%) is unexplained. Our count by sensor is in `validation_ideam_counts_dept_semester.csv`. Possible causes to check: department assignment along the Caquetá borders (the boundaries here are simplified to 300 m, and IDEAM may use another boundary version), or a different treatment of one sensor in that period.
+1. Caquetá 2024 (-14.2% and -8.0%) is a **border assignment difference with Meta**, not a counting error, but its exact cause is not identified. Evidence, for the best combination:
+
+   | Semester | Meta, ours vs IDEAM | Caquetá, ours vs IDEAM | Meta + Caquetá |
+   |---|---:|---:|---:|
+   | 2023-S1 | +238 | -225 | +13 (+0.04%) |
+   | 2024-S1 | +1,011 | -1,036 | -25 (-0.06%) |
+   | 2024-S2 | +442 | -400 | +42 (+0.32%) |
+
+   The two departments together match IDEAM almost exactly, and the error of one is the mirror of the other. So some detections that we assign to Meta are assigned to Caquetá by IDEAM. The amount (about 1,000 in 2024-S1) is too large to come from the 300 m simplification of our boundaries: only 496 Meta detections lie within 10 km of Caquetá. No single municipality explains it either: the Meta municipalities that touch Caquetá are Uribe and La Macarena, and their counts (1,276 and 6,248 in 2024-S1) do not match the shift in all three semesters. The most likely cause is that IDEAM uses another boundary version or layer along the Meta-Caquetá limit, which METHOD.md already lists as an accepted difference ("MGN version"). It affects only this comparison: our dataset assigns every area consistently with the MGN 2018.
+
+   Research on this (see [IDEAM_META_CAQUETA_BOUNDARY.md](IDEAM_META_CAQUETA_BOUNDARY.md)) found that **no source says which department layer IDEAM uses**, so the hypothesis is neither confirmed nor contradicted. It did find indirect support: the MGN 2018 uses an IGAC layer of May 2016, and a provisional IGAC limit in force since September 2020 moves about 274,000 ha from Meta to Caquetá according to press reports, which matches the sign of our difference (Meta too high, Caquetá too low). These facts come from the research and are not verified by us.
+
+   **To test it with data:** unzip the DANE MGN 2023 department shapefile (download it by hand from the DANE geoportal; it could not be fetched automatically) and run `python scripts/compare_boundary_versions.py data/processed/dane_mgn2018_departamentos.geojson <path to the 2023 department layer>`. If the gap closes with the 2023 layer, the hypothesis is supported. Until then it stays an open, documented difference. With the 2018 layer alone the script reproduces the current numbers (Caquetá -1,033, Meta +1,016 in 2024-S1).
 2. The team must confirm that the semester-based criteria above replace the monthly ones in METHOD.md.
 3. Values 6 to 10 of each IDEAM list were read from chart images (see IDEAM_REFERENCE.md), so a misread digit is possible. Re-check against the PDFs if a value looks odd.

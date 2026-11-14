@@ -72,6 +72,27 @@ Only municipalities and departments that had at least one active cell in the ref
 ### `static_source_mask`
 Cells excluded from near-real-time data as static sources (volcanoes such as Galeras, gas flares, industrial heat, offshore): `cell_id`, `lon`, `lat` (cell centroid). Useful if the web app wants to show where detections are suppressed.
 
+### Web JSON files (`data/processed/web/`)
+
+For a static web app that cannot read Parquet. Built by `python scripts/export_web_json.py` from the tables above and checked by `scripts/check_dataset.py`. Load `manifest.json` first.
+
+| File | Content |
+|---|---|
+| `manifest.json` | Departments (code, name, file, bytes), `levels`, `status_legend`, date bases, the fixed notice, alert parameters |
+| `status.json` | One status code per day of the reference series (`start`, `end`, `legend`, `status[]`) |
+| `departments.json` | Department-level `alerts` and `monthly` for all 33 departments (the fallback for municipalities with insufficient history) |
+| `departments/<code>.json` | One department: `municipalities`, `daily`, `other_sensors`, `alerts`, `monthly` |
+
+Format rules:
+- **Columnar:** each block is an object of equal-length arrays (one array per column).
+- **Dates are integers.** Day index `d` = days since `manifest.day_base` (2003-01-01). Month index `mo` = months since `manifest.month_base` (2012-01).
+- **`m` is a position** in that department's `municipalities` array (in `departments.json`, a position in its `departments` array).
+- **Level codes** `l` index into `manifest.levels`: `normal`, `elevated`, `unusual`, `extreme`, `insufficient`. Status codes index into `status_legend`: `snpp`, `n20_fill`, `no_data`.
+- **Sparse:** `daily` has only rows with activity (a missing municipality-day is zero, unless the day is `no_data`). `municipalities` lists every area of the department, including those with no activity.
+- **Columns:** `daily` is `m, d, c` (active cells). `alerts` is `m, d, c` (7-day cells), `p75, p90, p975, act` (baseline active days), `l`. `monthly` is `m, mo, cd` (cell days), `ad` (active days), `nd` (no-data days), `ok` (complete month, 0/1), `med`, `ratio`, `pct`. `other_sensors` is `s, m, d, c` with `legend` listing the sensors (MODIS Collection 6.1 and VIIRS NOAA-21).
+- **Missing numbers are null.**
+- **Size:** about 41 MB raw in total, but each department file is 0.06 to 0.5 MB once gzipped, which static hosts do automatically. Load only the departments the user selects.
+
 ### Other files
 - `build_info.json`: parameters, mask size, filter counts, reference range.
 - `filter_report.csv`: detections kept and dropped per sensor and reason.

@@ -87,7 +87,7 @@ Questions to settle:
 - [x] How the period when only MODIS exists is treated.
 - [x] How uncertainty is communicated.
 
-Done when: docs/METHOD.md exists, all three read it and agree. *The document exists. Still open: the three of you read it and confirm the defaults listed at its end.*
+Done when: docs/METHOD.md exists, all three read it and agree. *The document exists and the ten implementation defaults at its end were confirmed by a team member on November 14, 2026. Still open: the other two members read it and agree.*
 
 ## 6. Implement and validate the harmonization
 
