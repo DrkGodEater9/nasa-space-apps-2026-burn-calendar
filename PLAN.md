@@ -26,7 +26,7 @@ Roles, que rotan segun haga falta:
 Acordar:
 - [ ] Quien lleva cada rol.
 - [ ] Canal de comunicacion y horas de sincronizacion (15 minutos cada 3 o 4 horas).
-- [ ] Una rama de Git por rol: datos, web, entrega. Commits frecuentes.
+- [ ] Una rama de Git por rol: data, web, delivery. Commits frecuentes.
 - [ ] Region de trabajo: Colombia completa, con un departamento de prueba (por ejemplo Meta o Vichada).
 - [ ] Contrato de datos: columnas y formato del archivo que Datos le entrega a Web, con un archivo de ejemplo en la carpeta data/sample.
 
@@ -40,7 +40,7 @@ Terminado cuando: los tres saben su rol y el archivo de ejemplo existe.
 - [ ] Proyecto web creado en la rama web.
 - [ ] Los tres son colaboradores del repositorio.
 - [ ] Todos unidos al grupo de WhatsApp de Ipiales.
-- [ ] Archivo REFERENCIAS.md creado, con FIRMS, MODIS, VIIRS, DANE e IDEAM.
+- [ ] Archivo REFERENCES.md creado, con FIRMS, MODIS, VIIRS, DANE e IDEAM.
 
 Terminado cuando: Datos puede hacer una consulta de prueba a la API y recibir filas.
 
@@ -76,7 +76,7 @@ Terminado cuando: hay un cuaderno o script con estas respuestas, para discutirla
 
 ## 5. Decidir el metodo de armonizacion (los tres juntos)
 
-Esta decision es del equipo. Se toma con lo aprendido en el paso 4 y se escribe en docs/METODO.md con nuestras propias palabras y el porque de cada eleccion.
+Esta decision es del equipo. Se toma con lo aprendido en el paso 4 y se escribe en docs/METHOD.md con nuestras propias palabras y el porque de cada eleccion.
 
 Preguntas que hay que resolver:
 - [ ] Que filtros de calidad se aplican.
@@ -85,7 +85,7 @@ Preguntas que hay que resolver:
 - [ ] Como se trata el periodo en que solo existe MODIS.
 - [ ] Como se comunica la incertidumbre.
 
-Terminado cuando: docs/METODO.md existe, los tres lo leyeron y estan de acuerdo.
+Terminado cuando: docs/METHOD.md existe, los tres lo leyeron y estan de acuerdo.
 
 ## 6. Implementar y validar la armonizacion
 
