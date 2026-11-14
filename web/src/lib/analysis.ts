@@ -1,0 +1,509 @@
+// Note: Implementation assisted by AI (Claude Code) following Horum Labs' methodology.
+// Turns the columnar JSON files into the series the web app draws. Nothing here changes the
+// team's method (docs/METHOD.md): anomaly levels and percentiles come precomputed from the
+// data pipeline. This module only adds municipalities together for multi-municipality areas
+// and recomputes the "same month in other years" comparison for those sums, with the same
+// rule the pipeline uses for single units (checked by scripts/verify-analysis.ts).
+
+import type { AlertBlock, Area, DeptFile, NationalFile, StatusFile } from './types.ts';
+import {
+  LEVEL_EXTREME, LEVEL_INSUFFICIENT, LEVEL_NONE, LEVEL_UNUSUAL, levelRank,
+} from './colors.ts';
+import { dayParts, isoToDay, monthFirstDay, monthIndexOfDay, monthIndexToYM } from './dates.ts';
+
+// ---------------------------------------------------------------- indexing
+
+/** Row indices of a columnar block grouped by unit `m`, each group sorted by `key`. */
+export function groupRows(m: number[], key: number[], count: number): Int32Array[] {
+  const sizes = new Int32Array(count);
+  for (const v of m) sizes[v]++;
+  const groups = Array.from({ length: count }, (_, i) => new Int32Array(sizes[i]));
+  const fill = new Int32Array(count);
+  for (let i = 0; i < m.length; i++) groups[m[i]][fill[m[i]]++] = i;
+  for (const g of groups) {
+    let sorted = true;
+    for (let i = 1; i < g.length; i++) if (key[g[i]] < key[g[i - 1]]) { sorted = false; break; }
+    if (!sorted) g.sort((a, b) => key[a] - key[b]);
+  }
+  return groups;
+}
+
+/** Binary search for the row whose key equals `target` inside one group. */
+export function findRow(rows: Int32Array, key: number[], target: number): number {
+  let lo = 0;
+  let hi = rows.length - 1;
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+    const v = key[rows[mid]];
+    if (v === target) return rows[mid];
+    if (v < target) lo = mid + 1;
+    else hi = mid - 1;
+  }
+  return -1;
+}
+
+export interface IndexedDept {
+  file: DeptFile;
+  mpioIndex: Map<string, number>;
+  dailyRows: Int32Array[];
+  alertRows: Int32Array[];
+  otherRows: Int32Array[];
+}
+
+export function indexDept(file: DeptFile): IndexedDept {
+  const n = file.municipalities.length;
+  return {
+    file,
+    mpioIndex: new Map(file.municipalities.map((u, i) => [u.code, i])),
+    dailyRows: groupRows(file.daily.m, file.daily.d, n),
+    alertRows: groupRows(file.alerts.m, file.alerts.d, n),
+    otherRows: groupRows(file.other_sensors.m, file.other_sensors.d, n),
+  };
+}
+
+export interface IndexedNational {
+  file: NationalFile;
+  deptIndex: Map<string, number>;
+  alertRows: Int32Array[];
+  monthlyRows: Int32Array[];
+}
+
+export function indexNational(file: NationalFile): IndexedNational {
+  const n = file.departments.length;
+  return {
+    file,
+    deptIndex: new Map(file.departments.map((u, i) => [u.code, i])),
+    alertRows: groupRows(file.alerts.m, file.alerts.d, n),
+    monthlyRows: groupRows(file.monthly.m, file.monthly.mo, n),
+  };
+}
+
+export interface RefContext {
+  refStart: number;
+  refEnd: number;
+  /** Status code per reference day: 0 S-NPP, 1 NOAA-20 fill, 2 no data. */
+  status: Int8Array;
+}
+
+export function makeRefContext(range: [string, string], statusFile: StatusFile): RefContext {
+  const refStart = isoToDay(range[0]);
+  const refEnd = isoToDay(range[1]);
+  const status = new Int8Array(refEnd - refStart + 1).fill(-1);
+  const off = isoToDay(statusFile.start) - refStart;
+  statusFile.status.forEach((s, i) => {
+    const k = i + off;
+    if (k >= 0 && k < status.length) status[k] = s;
+  });
+  return { refStart, refEnd, status };
+}
+
+export const STATUS_SNPP = 0;
+export const STATUS_N20 = 1;
+export const STATUS_NODATA = 2;
+
+// ---------------------------------------------------------------- area series
+
+export interface AlertSnapshot {
+  c: number;
+  p75: number | null;
+  p90: number | null;
+  p975: number | null;
+  act: number | null;
+  l: number;
+}
+
+function snapshot(a: AlertBlock, r: number): AlertSnapshot {
+  return { c: a.c[r], p75: a.p75[r], p90: a.p90[r], p975: a.p975[r], act: a.act[r], l: a.l[r] };
+}
+
+export interface MonthStat {
+  mo: number;
+  y: number;
+  m: number;
+  cd: number;
+  ad: number;
+  nd: number;
+  days: number;
+  ok: boolean;
+  med: number | null;
+  ratio: number | null;
+  pct: number | null;
+  histYears: number;
+}
+
+export interface AreaSeries {
+  refStart: number;
+  refEnd: number;
+  /** Reference series (VIIRS S-NPP, NOAA-20 fill), indexed by day - refStart. */
+  cells: Int32Array;
+  cells7: Int32Array;
+  level: Int8Array;
+  /** 1 when the level shown comes from the department fallback (insufficient history). */
+  fallback: Uint8Array;
+  /** Member index that sets the area level that day (-1 when none). */
+  driver: Int16Array;
+  memberCells: Int32Array[];
+  /** Informational NOAA-21 series, same index as `cells`. */
+  n21: Int32Array;
+  /** MODIS Collection 6.1 series, indexed by day since 2003-01-01. */
+  modis: Int32Array;
+  monthly: MonthStat[];
+  /** Precomputed baseline per day, only when the area is a single municipality or department. */
+  baselineAt: ((day: number) => AlertSnapshot | null) | null;
+  insufficientMembers: number[];
+}
+
+export function computeAreaSeries(
+  area: Area,
+  depts: Map<string, IndexedDept>,
+  national: IndexedNational,
+  ctx: RefContext,
+): AreaSeries {
+  const { refStart, refEnd } = ctx;
+  const len = refEnd - refStart + 1;
+  const cells = new Int32Array(len);
+  const n21 = new Int32Array(len);
+  const modis = new Int32Array(refEnd + 1);
+  const level = new Int8Array(len).fill(LEVEL_NONE);
+  const fallback = new Uint8Array(len);
+  const driver = new Int16Array(len).fill(-1);
+  const memberCells = area.members.map(() => new Int32Array(len));
+  const insufficientCount = new Int32Array(area.members.length);
+
+  area.members.forEach((mem, k) => {
+    const dep = depts.get(mem.dpto);
+    const m = dep?.mpioIndex.get(mem.mpio);
+    if (!dep || m === undefined) return;
+    const { daily, other_sensors: other } = dep.file;
+    for (const r of dep.dailyRows[m]) {
+      const i = daily.d[r] - refStart;
+      if (i >= 0 && i < len) {
+        memberCells[k][i] += daily.c[r];
+        cells[i] += daily.c[r];
+      }
+    }
+    for (const r of dep.otherRows[m]) {
+      const sensor = other.legend[other.s[r]];
+      const d = other.d[r];
+      if (sensor === 'VIIRS_N21') {
+        const i = d - refStart;
+        if (i >= 0 && i < len) n21[i] += other.c[r];
+      } else if (sensor === 'MODIS_C61' && d >= 0 && d <= refEnd) {
+        modis[d] += other.c[r];
+      }
+    }
+  });
+
+  const na = national.file.alerts;
+  const isDepartment = area.kind === 'department';
+
+  if (isDepartment) {
+    const di = national.deptIndex.get(area.dptoCodes[0]);
+    if (di !== undefined) {
+      for (const r of national.alertRows[di]) {
+        const i = na.d[r] - refStart;
+        if (i >= 0 && i < len) level[i] = na.l[r];
+      }
+    }
+  } else {
+    // Per municipality level; "insufficient" falls back to its department (DATA_CONTRACT.md).
+    // For several municipalities the area shows the highest level among them.
+    area.members.forEach((mem, k) => {
+      const dep = depts.get(mem.dpto);
+      const m = dep?.mpioIndex.get(mem.mpio);
+      if (!dep || m === undefined) return;
+      const a = dep.file.alerts;
+      const di = national.deptIndex.get(mem.dpto);
+      for (const r of dep.alertRows[m]) {
+        const i = a.d[r] - refStart;
+        if (i < 0 || i >= len) continue;
+        let lv = a.l[r];
+        let fb = 0;
+        if (lv === LEVEL_INSUFFICIENT) {
+          insufficientCount[k]++;
+          if (di !== undefined) {
+            const nr = findRow(national.alertRows[di], na.d, a.d[r]);
+            if (nr >= 0 && na.l[nr] !== LEVEL_INSUFFICIENT) {
+              lv = na.l[nr];
+              fb = 1;
+            }
+          }
+        }
+        if (levelRank(lv) > levelRank(level[i])) {
+          level[i] = lv;
+          fallback[i] = fb;
+          driver[i] = k;
+        }
+      }
+    });
+  }
+
+  const cells7 = new Int32Array(len);
+  let acc = 0;
+  for (let i = 0; i < len; i++) {
+    acc += cells[i];
+    if (i >= 7) acc -= cells[i - 7];
+    cells7[i] = acc;
+  }
+
+  let baselineAt: AreaSeries['baselineAt'] = null;
+  if (isDepartment) {
+    const di = national.deptIndex.get(area.dptoCodes[0]);
+    if (di !== undefined) {
+      baselineAt = (day) => {
+        const r = findRow(national.alertRows[di], na.d, day);
+        return r < 0 ? null : snapshot(na, r);
+      };
+    }
+  } else if (area.members.length === 1) {
+    const mem = area.members[0];
+    const dep = depts.get(mem.dpto);
+    const m = dep?.mpioIndex.get(mem.mpio);
+    if (dep && m !== undefined) {
+      baselineAt = (day) => {
+        const r = findRow(dep.alertRows[m], dep.file.alerts.d, day);
+        return r < 0 ? null : snapshot(dep.file.alerts, r);
+      };
+    }
+  }
+
+  return {
+    refStart,
+    refEnd,
+    cells,
+    cells7,
+    level,
+    fallback,
+    driver,
+    memberCells,
+    n21,
+    modis,
+    monthly: computeMonthly(cells, ctx),
+    baselineAt,
+    insufficientMembers: [...insufficientCount.keys()].filter((k) => insufficientCount[k] > 0),
+  };
+}
+
+// ---------------------------------------------------------------- monthly
+
+function median(values: number[]): number | null {
+  if (!values.length) return null;
+  const s = [...values].sort((a, b) => a - b);
+  const mid = s.length >> 1;
+  return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
+}
+
+/**
+ * Monthly totals and the comparison with the same calendar month in the other years
+ * (complete months only), as in `monthly_municipio` (DATA_CONTRACT.md).
+ */
+export function computeMonthly(cells: Int32Array, ctx: RefContext): MonthStat[] {
+  const { refStart, refEnd, status } = ctx;
+  const firstMo = monthIndexOfDay(refStart);
+  const lastMo = monthIndexOfDay(refEnd);
+  const rows: MonthStat[] = [];
+  for (let mo = firstMo; mo <= lastMo; mo++) {
+    const a = monthFirstDay(mo);
+    const b = monthFirstDay(mo + 1) - 1;
+    let cd = 0;
+    let ad = 0;
+    let nd = 0;
+    for (let day = Math.max(a, refStart); day <= Math.min(b, refEnd); day++) {
+      const i = day - refStart;
+      cd += cells[i];
+      if (cells[i] > 0) ad++;
+      if (status[i] === STATUS_NODATA) nd++;
+    }
+    const { y, m } = monthIndexToYM(mo);
+    rows.push({
+      mo, y, m, cd, ad, nd,
+      days: Math.min(b, refEnd) - Math.max(a, refStart) + 1,
+      ok: a >= refStart && b <= refEnd,
+      med: null, ratio: null, pct: null, histYears: 0,
+    });
+  }
+  return addHistory(rows);
+}
+
+export function addHistory(rows: MonthStat[]): MonthStat[] {
+  for (const row of rows) {
+    const hist = rows.filter((o) => o.m === row.m && o.y !== row.y && o.ok).map((o) => o.cd);
+    row.histYears = hist.length;
+    row.med = median(hist);
+    // Kept unrounded; the pipeline rounds to 1 and 2 decimals (Python half-to-even) for storage.
+    row.pct = hist.length ? (100 * hist.filter((v) => v <= row.cd).length) / hist.length : null;
+    row.ratio = row.med && row.med > 0 ? row.cd / row.med : null;
+  }
+  return rows;
+}
+
+// ---------------------------------------------------------------- range summaries
+
+export interface RangeSummary {
+  days: number;
+  cellDays: number;
+  activeDays: number;
+  noDataDays: number;
+  filledDays: number;
+  peakDay: number;
+  peakCells: number;
+  levelDays: number[];
+  lastLevel: number;
+  lastLevelDay: number;
+}
+
+export function summarizeRange(series: AreaSeries, ctx: RefContext, from: number, to: number): RangeSummary {
+  const a = Math.max(from, series.refStart);
+  const b = Math.min(to, series.refEnd);
+  const out: RangeSummary = {
+    days: Math.max(0, b - a + 1), cellDays: 0, activeDays: 0, noDataDays: 0, filledDays: 0,
+    peakDay: -1, peakCells: 0, levelDays: [0, 0, 0, 0, 0], lastLevel: LEVEL_NONE, lastLevelDay: b,
+  };
+  for (let day = a; day <= b; day++) {
+    const i = day - series.refStart;
+    const c = series.cells[i];
+    out.cellDays += c;
+    if (c > 0) out.activeDays++;
+    if (c > out.peakCells) { out.peakCells = c; out.peakDay = day; }
+    if (ctx.status[i] === STATUS_NODATA) out.noDataDays++;
+    if (ctx.status[i] === STATUS_N20) out.filledDays++;
+    const l = series.level[i];
+    if (l >= 0) out.levelDays[l]++;
+  }
+  if (b >= a) out.lastLevel = series.level[b - series.refStart];
+  return out;
+}
+
+export interface Episode {
+  start: number;
+  end: number;
+  peakDay: number;
+  peakLevel: number;
+  peakCells7: number;
+}
+
+/** Runs of consecutive days at "unusual" or "extreme" level inside the range. */
+export function findEpisodes(series: AreaSeries, from: number, to: number): Episode[] {
+  const a = Math.max(from, series.refStart);
+  const b = Math.min(to, series.refEnd);
+  const out: Episode[] = [];
+  let cur: Episode | null = null;
+  for (let day = a; day <= b; day++) {
+    const i = day - series.refStart;
+    const l = series.level[i];
+    const hot = l === LEVEL_UNUSUAL || l === LEVEL_EXTREME;
+    if (hot) {
+      if (!cur) cur = { start: day, end: day, peakDay: day, peakLevel: l, peakCells7: series.cells7[i] };
+      cur.end = day;
+      if (l > cur.peakLevel || (l === cur.peakLevel && series.cells7[i] > cur.peakCells7)) {
+        cur.peakLevel = l;
+        cur.peakDay = day;
+        cur.peakCells7 = series.cells7[i];
+      }
+    } else if (cur) {
+      out.push(cur);
+      cur = null;
+    }
+  }
+  if (cur) out.push(cur);
+  return out.reverse();
+}
+
+export interface YearTotal {
+  y: number;
+  cd: number;
+  complete: boolean;
+}
+
+export function yearTotals(monthly: MonthStat[]): YearTotal[] {
+  const map = new Map<number, YearTotal>();
+  for (const r of monthly) {
+    const t = map.get(r.y) ?? { y: r.y, cd: 0, complete: true };
+    t.cd += r.cd;
+    if (!r.ok) t.complete = false;
+    map.set(r.y, t);
+  }
+  return [...map.values()];
+}
+
+export function modisYearTotals(modis: Int32Array, firstYear = 2003): YearTotal[] {
+  const out = new Map<number, YearTotal>();
+  for (let d = 0; d < modis.length; d++) {
+    const { y } = dayParts(d);
+    if (y < firstYear) continue;
+    const t = out.get(y) ?? { y, cd: 0, complete: true };
+    t.cd += modis[d];
+    out.set(y, t);
+  }
+  const last = dayParts(modis.length - 1);
+  const lastT = out.get(last.y);
+  if (lastT && !(last.m === 11 && last.d === 31)) lastT.complete = false;
+  return [...out.values()];
+}
+
+// ---------------------------------------------------------------- national overview
+
+export interface DeptStatus {
+  code: string;
+  name: string;
+  level: number;
+  cells7: number;
+  p90: number | null;
+  p975: number | null;
+}
+
+export function nationalAt(national: IndexedNational, day: number): DeptStatus[] {
+  const { alerts } = national.file;
+  return national.file.departments.map((u, di) => {
+    const r = findRow(national.alertRows[di], alerts.d, day);
+    return {
+      code: u.code,
+      name: u.name,
+      level: r < 0 ? LEVEL_NONE : alerts.l[r],
+      cells7: r < 0 ? 0 : alerts.c[r],
+      p90: r < 0 ? null : alerts.p90[r],
+      p975: r < 0 ? null : alerts.p975[r],
+    };
+  });
+}
+
+/** National monthly cell-days: the sum of the 33 departments, with the same history rule. */
+export function nationalMonthly(national: IndexedNational, ctx: RefContext): MonthStat[] {
+  const { monthly } = national.file;
+  const firstMo = monthIndexOfDay(ctx.refStart);
+  const lastMo = monthIndexOfDay(ctx.refEnd);
+  const cd = new Float64Array(lastMo - firstMo + 1);
+  for (let r = 0; r < monthly.mo.length; r++) {
+    const k = monthly.mo[r] - firstMo;
+    if (k >= 0 && k < cd.length) cd[k] += monthly.cd[r];
+  }
+  const rows: MonthStat[] = [];
+  for (let mo = firstMo; mo <= lastMo; mo++) {
+    const a = monthFirstDay(mo);
+    const b = monthFirstDay(mo + 1) - 1;
+    const { y, m } = monthIndexToYM(mo);
+    rows.push({
+      mo, y, m, cd: cd[mo - firstMo], ad: 0, nd: 0,
+      days: Math.min(b, ctx.refEnd) - Math.max(a, ctx.refStart) + 1,
+      ok: a >= ctx.refStart && b <= ctx.refEnd,
+      med: null, ratio: null, pct: null, histYears: 0,
+    });
+  }
+  return addHistory(rows);
+}
+
+/** Per-municipality level and 7-day cells on one day, for the map. */
+export function municipalLevelsAt(
+  depts: Map<string, IndexedDept>,
+  day: number,
+): Map<string, { level: number; cells7: number; name: string }> {
+  const out = new Map<string, { level: number; cells7: number; name: string }>();
+  for (const dep of depts.values()) {
+    const a = dep.file.alerts;
+    dep.file.municipalities.forEach((u, m) => {
+      const r = findRow(dep.alertRows[m], a.d, day);
+      out.set(u.code, { level: r < 0 ? LEVEL_NONE : a.l[r], cells7: r < 0 ? 0 : a.c[r], name: u.name });
+    });
+  }
+  return out;
+}

@@ -1,0 +1,8 @@
+node_modules/
+dist/
+# Copied from ../data/processed by scripts/sync-data.mjs before dev and build.
+public/data/
+*.local
+
+# The root .gitignore ignores "lib/" (Python template); the web app source lives in src/lib.
+!src/lib/
