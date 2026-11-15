@@ -22,7 +22,10 @@ import { NationalOverview } from '../components/NationalOverview.tsx';
 import { AreaMembers, AreaPicker } from '../components/AreaPicker.tsx';
 import { ActivityCalendar, SENSOR_START, valueAt } from '../components/ActivityCalendar.tsx';
 import { MonthHeadline, MonthlyChart, SeasonalityMatrix, TopMonths, YearBars } from '../components/Charts.tsx';
-import { Card, DataQuality, Episodes, Kpis, PngButton, RangeControls, viewCaption, viewOf } from '../components/Panels.tsx';
+import { Card, DataQuality, Episodes, Kpis, PngButton, RangeControls, Tabs, viewCaption, viewOf } from '../components/Panels.tsx';
+
+const PANEL_TABS = ['calendar', 'history', 'unusual', 'notes'] as const;
+type PanelTab = (typeof PANEL_TABS)[number];
 import { Icon } from '../components/Icon.tsx';
 
 const COLOMBIA_BOUNDS: [number, number, number, number] = [-79.2, -4.3, -66.8, 12.6];
@@ -63,7 +66,27 @@ export function ExplorePage({ boot, params, onParams }: Props) {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [csvMenu, setCsvMenu] = useState(false);
+  // The area view is split into sections, one visible at a time, so the panel is not one long column.
+  const [tab, setTab] = useState<PanelTab>(() => (PANEL_TABS.includes(params.get('tab') as PanelTab) ? (params.get('tab') as PanelTab) : 'calendar'));
+  // The search box of the area view stays closed until the reader asks to change the area.
+  const [pickerOpen, setPickerOpen] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
+
+  // The CSV menu closes on a tap or click outside it and on Escape. Touch screens have no "mouse leave",
+  // so without this the menu stayed open over the calendar.
+  useEffect(() => {
+    if (!csvMenu) return;
+    const onDown = (e: PointerEvent) => {
+      if (!(e.target instanceof Element) || !e.target.closest('.menu-wrap')) setCsvMenu(false);
+    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setCsvMenu(false); };
+    document.addEventListener('pointerdown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('pointerdown', onDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [csvMenu]);
 
   // ------------------------------------------------------------ URL sync
   useEffect(() => {
@@ -75,8 +98,9 @@ export function ExplorePage({ boot, params, onParams }: Props) {
     if (sensor !== 'ref') p.set('sensor', sensor);
     if (colorMode !== 'cells') p.set('color', colorMode);
     if (imageryOn) p.set('img', '1');
+    if (area && tab !== 'calendar') p.set('tab', tab);
     onParams(p);
-  }, [area, range, focusDay, sensor, colorMode, imageryOn, onParams, refEnd]);
+  }, [area, range, focusDay, sensor, colorMode, imageryOn, tab, onParams, refEnd]);
 
   // ------------------------------------------------------------ department files
   useEffect(() => {
@@ -170,6 +194,7 @@ export function ExplorePage({ boot, params, onParams }: Props) {
     }
     setArea(a);
     setCsvMenu(false);
+    setPickerOpen(false);
     panelRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
     if (window.innerWidth < 1100) window.setTimeout(() => panelRef.current?.scrollIntoView({ behavior: 'smooth' }), 350);
   }, []);
@@ -246,6 +271,13 @@ export function ExplorePage({ boot, params, onParams }: Props) {
 
   const bounds = useMemo(() => (area && areaBounds(geo, area)) || COLOMBIA_BOUNDS, [geo, area]);
   const memberNames = useMemo(() => area?.members.map((m) => m.name) ?? [], [area]);
+  // Short form of the low-confidence warning, shown next to the calendar whenever estimated days of an area
+  // that did not pass (or was not part of) the harmonization test are on screen. The full text is in Data notes.
+  const lowConfidence = !series?.era || !hasEra || viewFrom >= refStart || series.era.status === 'ok' ? null
+    : series.era.status === 'not_tested' ? 'The MODIS rescaling was tested for departments, not at this scale: the error of the hatched days is unknown.'
+    : series.era.status === 'viirs_only' ? 'This department did not pass the harmonization test: the hatched days can be off by more than 30%.'
+    : series.era.status === 'insufficient' ? 'Too few detections here to test the harmonization: the error of the hatched days is unknown.'
+    : 'For this department the estimated error of the hatched days is above 30%.';
   const sensorLabel = sensor === 'ref' ? (hasEra && viewFrom < refStart ? 'MODIS rescaled + VIIRS' : 'VIIRS reference') : sensor === 'modis' ? 'MODIS C6.1, raw' : 'NOAA-21, info';
 
   return (
@@ -277,15 +309,16 @@ export function ExplorePage({ boot, params, onParams }: Props) {
                   <p>{area.sublabel}</p>
                 </div>
                 <div className="area-actions">
-                  <button className="btn ghost" onClick={share} title="Copy a link to this view"><Icon name="link" /> Share</button>
-                  <button className="btn ghost" onClick={clearArea} title="Back to the national overview"><Icon name="close" /> Clear</button>
+                  <button className={`btn quiet ${pickerOpen ? 'on' : ''}`} onClick={() => setPickerOpen(!pickerOpen)} aria-expanded={pickerOpen} title="Search another place or type coordinates"><Icon name="search" /> Change area</button>
+                  <button className="btn quiet" onClick={share} title="Copy a link to this view"><Icon name="link" /> Share</button>
+                  <button className="btn quiet" onClick={clearArea} title="Back to the national overview"><Icon name="close" /> Clear</button>
                 </div>
               </div>
               <AreaMembers area={area} />
-              <AreaPicker geo={geo} compact onDepartment={onDepartment} onMunicipality={onMunicipality} onPoint={onPoint} onBox={onBox} />
+              {pickerOpen && <AreaPicker geo={geo} compact onDepartment={onDepartment} onMunicipality={onMunicipality} onPoint={onPoint} onBox={onBox} />}
             </section>
 
-            <section className="card query">
+            <section className="query">
               <RangeControls
                 from={viewFrom}
                 to={to}
@@ -306,6 +339,19 @@ export function ExplorePage({ boot, params, onParams }: Props) {
 
             {series && summary && (
               <>
+                <Tabs<PanelTab>
+                  label="Sections"
+                  value={tab}
+                  onChange={setTab}
+                  options={[
+                    { value: 'calendar', label: 'Calendar' },
+                    { value: 'history', label: 'History' },
+                    { value: 'unusual', label: 'Unusual activity', count: episodes.length, hot: episodes.length > 0 },
+                    { value: 'notes', label: 'Data notes' },
+                  ]}
+                />
+
+                {tab === 'calendar' && (<>
                 {sensor !== 'ref' && (
                   <div className={`sensor-note ${sensor}`}>
                     <Icon name="info" />
@@ -315,10 +361,18 @@ export function ExplorePage({ boot, params, onParams }: Props) {
                   </div>
                 )}
 
+                {lowConfidence && (
+                  <div className="confidence-note" role="note">
+                    <Icon name="warning" size={14} />
+                    <span><b>Low confidence before {formatDay(refStart, false)}.</b> {lowConfidence} <button className="link-btn" onClick={() => setTab('notes')}>Data notes</button></span>
+                  </div>
+                )}
+
                 <Card
                   title="Activity calendar"
                   icon="calendar"
-                  sub={<>{viewCaption(viewOf(viewFrom, to, minDay, refEnd), viewFrom, to)}<br />Each square is one day · {sensor === 'ref' ? (hasEra ? 'hot spots, harmonized MODIS + VIIRS (hatched days are estimates)' : 'hot spots (VIIRS reference)') : sensorLabel}{years > 1 ? ' · click a year to open only that year' : ''}</>}
+                  sub={viewCaption(viewOf(viewFrom, to, minDay, refEnd), viewFrom, to)}
+                  info={<>Each square is one day · {sensor === 'ref' ? (hasEra ? 'hot spots, harmonized MODIS + VIIRS (hatched days are estimates)' : 'hot spots (VIIRS reference)') : sensorLabel}. Hover a day for its numbers and click it to inspect it on the map{years > 1 ? '; click a year to open only that year' : ''}. Arrow keys move the selected day.</>}
                   actions={
                     <div className="card-buttons">
                     <PngButton
@@ -374,13 +428,15 @@ export function ExplorePage({ boot, params, onParams }: Props) {
 
                 <Kpis s={summary} sensorLabel={sensorLabel} showLevels={sensor === 'ref'} />
 
-
                 {sensor === 'modis' && (
-                  <Card title="MODIS, raw" icon="clock" sub="MODIS Collection 6.1 hot spots per year, as observed and not rescaled. 2000–2002 are excluded: a single satellite and incomplete data.">
+                  <Card title="MODIS, raw" icon="clock" sub="Hot spots per year, as observed and not rescaled."
+                    info="MODIS Collection 6.1 hot spots per year, as observed and not rescaled. 2000–2002 are excluded: a single satellite and incomplete data.">
                     <YearBars totals={modisTotals} accent />
                   </Card>
                 )}
+                </>)}
 
+                {tab === 'history' && (<>
                 <Card title="This month vs. normal" icon="chart"
                   actions={rangeMonths.length > 1 ? (
                     <PngButton
@@ -390,7 +446,8 @@ export function ExplorePage({ boot, params, onParams }: Props) {
                       note={series.era ? 'The median uses 2003–2011 MODIS rescaled to VIIRS units (estimates).' : undefined}
                     />
                   ) : undefined}
-                  sub="Monthly hot spots in the selected dates against the median of the same month in the other years since 2003: VIIRS from 2012, MODIS rescaled to VIIRS units (estimated) for 2003–2011.">
+                  sub="Each month against the median of the same month in the other years."
+                  info="Monthly hot spots in the selected dates against the median of the same month in the other years since 2003: VIIRS from 2012, MODIS rescaled to VIIRS units (estimated) for 2003–2011. Orange months are above the 90th percentile of their history.">
                   <MonthHeadline row={headlineMonth} partial={partialMonth} />
                   {rangeMonths.length > 1 && <MonthlyChart rows={rangeMonths} />}
                 </Card>
@@ -404,7 +461,8 @@ export function ExplorePage({ boot, params, onParams }: Props) {
                       note={eraMonths.length ? 'Hatched months (2003–2011) are MODIS rescaled to VIIRS units: estimates, not observations.' : undefined}
                     />
                   }
-                  sub={eraMonths.length
+                  sub="Every month on record. Brighter is more active."
+                  info={eraMonths.length
                   ? 'Every month since 2003: VIIRS from 2012, MODIS rescaled to VIIRS units for 2003–2011 (hatched, estimates). Darker is quieter, brighter is more active. The bars below show the typical month.'
                   : 'Every month since 2012 (VIIRS). Darker is quieter, brighter is more active. The bars below show the typical month.'}>
                   <div className="season-grid">
@@ -422,18 +480,24 @@ export function ExplorePage({ boot, params, onParams }: Props) {
                     </div>
                   </div>
                 </Card>
+                </>)}
 
+                {tab === 'unusual' && (
                 <Card
                   title="Unusual activity"
                   icon="warning"
-                  sub={<>Runs of days whose 7-day total is above the 90th percentile for that place and season (at least 3 hot spots). VIIRS era only. {fmtInt(episodes.length)} in the selected dates.</>}
+                  sub={<>{fmtInt(episodes.length)} in the selected dates. Click one to see it on the map.</>}
+                  info="Runs of days whose 7-day total is above the 90th percentile for that place and season (at least 3 hot spots). VIIRS era only."
                 >
                   <Episodes episodes={episodes} onFocus={setFocusDay} />
                 </Card>
+                )}
 
+                {tab === 'notes' && (
                 <Card title="Data coverage and caveats" icon="info">
                   <DataQuality area={area} series={series} summary={refSummary!} ctx={ctx} from={from} to={to} />
                 </Card>
+                )}
               </>
             )}
           </>

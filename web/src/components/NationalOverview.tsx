@@ -11,7 +11,7 @@ import type { GeoIndex } from '../lib/geo.ts';
 import { AreaPicker } from './AreaPicker.tsx';
 import { MonthlyChart, YearBars } from './Charts.tsx';
 import { Icon } from './Icon.tsx';
-import { Card, PngButton } from './Panels.tsx';
+import { Card, PngButton, Segmented } from './Panels.tsx';
 
 interface Props {
   geo: GeoIndex;
@@ -47,6 +47,10 @@ export const NationalOverview = memo(function NationalOverview(p: Props) {
   // Memoized so the (memoized) chart does not redraw when only the selected day changes.
   const last36 = useMemo(() => p.monthly.slice(-36), [p.monthly]);
   const list = showAll ? ranked : ranked.slice(0, 10);
+  // The two national trends share one card: the last 36 months, or every year since 2003.
+  const [trend, setTrend] = useState<'months' | 'years'>('months');
+  const hasYears = !!p.harm && p.years.some((t) => t.est);
+  const showMonths = trend === 'months' || !hasYears;
 
   return (
     <div className="overview">
@@ -54,18 +58,16 @@ export const NationalOverview = memo(function NationalOverview(p: Props) {
         <div className="eyebrow"><Icon name="flame" size={14} /> Harmonized MODIS + VIIRS hot spots · Colombia 2003 – today</div>
         <h1>When and where does Colombia burn?</h1>
         <p>
-          A daily calendar of satellite fire activity for any municipality, department or area you draw, built on NASA FIRMS
-          data. Each day is compared with the same season in every year since 2012, so you can tell an ordinary dry season
-          from an unusual one.
+          A daily calendar of satellite fire activity since 2003 for any municipality, department or area you draw,
+          built on NASA FIRMS data. It tells an ordinary dry season from an unusual one.
         </p>
         <AreaPicker geo={p.geo} onDepartment={p.onDepartment} onMunicipality={p.onMunicipality} onPoint={p.onPoint} onBox={p.onBox} />
-        <div className="steps">
-          <div><span>1</span><p>Pick an area: search, click the map, <button className="link-btn" onClick={p.onDrawTool}>draw a polygon</button> or type coordinates.</p></div>
-          <div><span>2</span><p>Choose dates. Every area goes back to 2003: VIIRS from 2012, MODIS rescaled to VIIRS units before (estimated, with a confidence warning where the rescaling was not tested or failed).</p></div>
-          <div><span>3</span><p>Read the calendar, compare with history and download the CSV.</p></div>
-        </div>
+        <p className="hero-hint">
+          Search a place, click the map or <button className="link-btn" onClick={p.onDrawTool}>draw an area</button>.
+          Then read its calendar, compare it with its history and download the data.
+        </p>
         <div className="suggest">
-          <span className="muted small">Try:</span>
+          <span className="muted small">Try</span>
           {SUGGESTIONS.map((s) => (
             <button key={s.code} className="suggest-btn" onClick={() => (s.kind === 'd' ? p.onDepartment(s.code) : p.onMunicipality(s.code))}>
               <b>{s.label}</b><small>{s.why}</small>
@@ -77,7 +79,8 @@ export const NationalOverview = memo(function NationalOverview(p: Props) {
       <Card
         title={<>Colombia on {formatDay(p.day, false)}</>}
         icon="globe"
-        sub="Departments ranked by their 7-day activity level against the same season since 2012. Click one to explore it."
+        sub="Departments by activity level in the last 7 days. Click one to explore it."
+        info="Each department's 7-day total is compared with the same season in every other year since 2012 (VIIRS). The level says how unusual it is for that place and season, not how many hot spots there are."
       >
         <div className="nat-total">
           <div><b>{fmtInt(total)}</b><span>hot spots in the last 7 days</span></div>
@@ -103,28 +106,33 @@ export const NationalOverview = memo(function NationalOverview(p: Props) {
         <button className="link-btn" onClick={() => setShowAll(!showAll)}>{showAll ? 'Show top 10' : 'Show all 33 departments'}</button>
       </Card>
 
-      <Card title="National activity, last 36 months" icon="chart"
+      <Card title="National activity" icon="chart"
         actions={
-          <PngButton
-            filename="burn_calendar_colombia_last_36_months.png"
-            title="Colombia · national hot spots, last 36 months"
-            subtitle="Hot spots per month (VIIRS reference) · dashed line: median of the same month in the other years since 2003"
-            note="The median uses 2003–2011 MODIS rescaled to VIIRS units (estimates)."
-          />
+          <div className="card-buttons">
+            {hasYears && (
+              <Segmented<'months' | 'years'>
+                label="National activity period"
+                value={trend}
+                onChange={setTrend}
+                options={[{ value: 'months', label: 'Last 36 months' }, { value: 'years', label: 'Per year since 2003' }]}
+              />
+            )}
+            {showMonths && (
+              <PngButton
+                filename="burn_calendar_colombia_last_36_months.png"
+                title="Colombia · national hot spots, last 36 months"
+                subtitle="Hot spots per month (VIIRS reference) · dashed line: median of the same month in the other years since 2003"
+                note="The median uses 2003–2011 MODIS rescaled to VIIRS units (estimates)."
+              />
+            )}
+          </div>
         }
-        sub="Hot spots per month, all 33 departments (VIIRS reference). The dashed line is the median of the same month in the other years since 2003 (2003–2011 estimated from MODIS); orange months are above the 90th percentile of their history.">
-        <MonthlyChart rows={last36} />
+        sub={showMonths ? 'Hot spots per month against the median of the same month.' : 'One harmonized series: MODIS rescaled (lighter bars) and VIIRS.'}
+        info={showMonths
+          ? 'Hot spots per month, all 33 departments (VIIRS reference). The dashed line is the median of the same month in the other years since 2003 (2003–2011 estimated from MODIS); orange months are above the 90th percentile of their history.'
+          : <>One harmonized series. 2003–2011 are MODIS rescaled to VIIRS units with a factor per month (lighter bars, estimates); from 2012 the values are VIIRS observations. In the test the national monthly total was predicted with a median error of {p.harm?.national_error_all_months_pct.toFixed(1)}%. {p.harm?.notice}</>}>
+        {showMonths ? <MonthlyChart rows={last36} /> : <YearBars totals={p.years} />}
       </Card>
-
-      {p.harm && p.years.some((t) => t.est) && (
-        <Card
-          title="Colombia, hot spots per year since 2003"
-          icon="clock"
-          sub={<>One harmonized series. 2003–2011 are MODIS rescaled to VIIRS units with a factor per month (lighter bars, estimates); from 2012 the values are VIIRS observations. In the test the national monthly total was predicted with a median error of {p.harm.national_error_all_months_pct.toFixed(1)}%.</>}
-        >
-          <YearBars totals={p.years} note={p.harm.notice} />
-        </Card>
-      )}
     </div>
   );
 });

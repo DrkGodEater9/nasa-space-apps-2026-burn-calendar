@@ -9,20 +9,49 @@ import { clampDay, dayParts, dayToISO, formatDay, isValidIso, isoToDay, ymdToDay
 import { fmtInt, plural } from '../lib/format.ts';
 import { Icon } from './Icon.tsx';
 
-export function Card({ title, icon, actions, children, sub, className, id }: {
-  title: ReactNode; icon?: string; actions?: ReactNode; children: ReactNode; sub?: ReactNode; className?: string; id?: string;
+/**
+ * A titled panel. `sub` is one short line that is always visible; `info` is the longer explanation of how
+ * to read the chart, shown only when the reader opens it with the "i" button next to the title.
+ */
+export function Card({ title, icon, actions, children, sub, info, className, id }: {
+  title: ReactNode; icon?: string; actions?: ReactNode; children: ReactNode; sub?: ReactNode; info?: ReactNode; className?: string; id?: string;
 }) {
+  const [open, setOpen] = useState(false);
   return (
     <section className={`card ${className ?? ''}`} id={id}>
       <header className="card-head">
         <div>
-          <h3>{icon && <Icon name={icon} />} {title}</h3>
+          <h3>
+            {icon && <Icon name={icon} />} {title}
+            {info && (
+              <button className={`info-btn ${open ? 'on' : ''}`} onClick={() => setOpen(!open)} aria-expanded={open} aria-label="How to read this" title="How to read this">
+                <Icon name="info" size={14} />
+              </button>
+            )}
+          </h3>
           {sub && <p className="card-sub">{sub}</p>}
         </div>
         {actions && <div className="card-actions">{actions}</div>}
       </header>
+      {info && open && <p className="card-info">{info}</p>}
       {children}
     </section>
+  );
+}
+
+/** Section tabs. Each tab can carry a small count. */
+export function Tabs<T extends string>({ value, options, onChange, label }: {
+  value: T; options: { value: T; label: string; count?: number; hot?: boolean }[]; onChange: (v: T) => void; label: string;
+}) {
+  return (
+    <div className="tabs" role="tablist" aria-label={label}>
+      {options.map((o) => (
+        <button key={o.value} role="tab" aria-selected={value === o.value} className={value === o.value ? 'on' : ''} onClick={() => onChange(o.value)}>
+          {o.label}
+          {o.count !== undefined && <span className={`tab-count ${o.hot ? 'hot' : ''}`}>{fmtInt(o.count)}</span>}
+        </button>
+      ))}
+    </div>
   );
 }
 
@@ -140,11 +169,15 @@ export function RangeControls({ from, to, minDay, maxDay, onChange, sensor, onSe
     set(...viewRange(v, minDay, maxDay));
   };
 
+  // Sensor and color options live behind "Display", closed by default: most readers never change them.
+  // It starts open when the link already carries a non-default choice, so that choice is visible.
+  const [optsOpen, setOptsOpen] = useState(sensor !== 'ref' || colorMode !== 'cells');
+  const displaySummary = sensor === 'modis' ? 'MODIS, raw' : sensor === 'n21' ? 'NOAA-21' : colorMode === 'level' ? 'Anomaly level' : 'Harmonized';
+
   return (
     <div className="range">
       <div className="range-row">
         <div className="view-pick">
-          <span className="view-label">Calendar view</span>
           <Segmented<CalendarView>
             label="Calendar view"
             value={shown}
@@ -158,6 +191,10 @@ export function RangeControls({ from, to, minDay, maxDay, onChange, sensor, onSe
           />
         </div>
         {shown !== 'custom' && <span className="view-dates">{formatDay(from, false)} – {formatDay(to, false)}</span>}
+        <button className={`btn quiet display-btn ${optsOpen ? 'on' : ''}`} onClick={() => setOptsOpen(!optsOpen)} aria-expanded={optsOpen}
+          title="Choose the sensor series and how the calendar is colored">
+          <Icon name="layers" size={14} /> Display<span className="display-current">{displaySummary}</span>
+        </button>
       </div>
       {shown === 'custom' && (
         <div className="range-row custom">
@@ -193,7 +230,7 @@ export function RangeControls({ from, to, minDay, maxDay, onChange, sensor, onSe
           </div>
         </div>
       )}
-      <div className="range-row options">
+      {optsOpen && <div className="range-row options">
         <Segmented<Sensor>
           label="Sensor series"
           value={sensor}
@@ -223,7 +260,7 @@ export function RangeControls({ from, to, minDay, maxDay, onChange, sensor, onSe
             )}
           </>
         )}
-      </div>
+      </div>}
     </div>
   );
 }

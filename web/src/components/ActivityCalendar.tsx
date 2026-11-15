@@ -5,7 +5,7 @@
 // Single calendar: for every area, the days before the VIIRS reference are MODIS rescaled to VIIRS
 // units (HARMONIZATION.md Part 5). They are estimates and are always hatched.
 
-import { memo, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from 'react';
+import { memo, useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type MouseEvent, type ReactNode } from 'react';
 import type { AreaSeries, RefContext } from '../lib/analysis.ts';
 import { STATUS_N20, STATUS_NODATA } from '../lib/analysis.ts';
 import type { ColorMode, Sensor } from '../lib/types.ts';
@@ -210,9 +210,10 @@ function ActivityCalendarImpl(p: Props) {
 
   const onMove = (e: MouseEvent<SVGSVGElement>) => {
     const d = dayAtPointer(e);
-    if (d === null || !wrap.current) return setTip(null);
-    const box = wrap.current.getBoundingClientRect();
-    setTip({ day: d, x: e.clientX - box.left + wrap.current.scrollLeft, y: e.clientY - box.top });
+    if (d === null) return setTip(null);
+    // Pointer position in the window: the tooltip is fixed to the viewport, so it is right wherever the
+    // calendar has been scrolled to, and it never adds a scrollbar to the calendar.
+    setTip({ day: d, x: e.clientX, y: e.clientY });
   };
 
   const onClick = (e: MouseEvent<SVGSVGElement>) => {
@@ -233,6 +234,15 @@ function ActivityCalendarImpl(p: Props) {
   }
 
   const hoverPos = tip ? cellPos(tip.day) : null;
+  // The tooltip is fixed to the window, so any scroll (the panel, the calendar, the page) hides it
+  // instead of leaving it behind over other content.
+  useEffect(() => {
+    if (!tip) return;
+    const hide = () => setTip(null);
+    window.addEventListener('scroll', hide, true);
+    return () => window.removeEventListener('scroll', hide, true);
+  }, [tip !== null]);
+
   const focusPos = cellPos(p.focusDay);
 
   return (
@@ -288,7 +298,7 @@ function ActivityCalendarImpl(p: Props) {
           {focusPos && <rect className="cal-focus" x={focusPos[0]} y={focusPos[1]} width={CELL} height={CELL} rx={2} />}
           {hoverPos && <rect className="cal-hover" x={hoverPos[0]} y={hoverPos[1]} width={CELL} height={CELL} rx={2} />}
         </svg>
-        {tip && <CalendarTip {...p} tip={tip} width={wrap.current?.clientWidth ?? 600} />}
+        {tip && <CalendarTip {...p} tip={tip} />}
       </div>
       <CalendarLegend bins={bins} colorMode={sensor === 'ref' ? p.colorMode : 'cells'} sensor={sensor} markUnusual={p.markUnusual} hasEstimates={drawing.hasEstimates} />
     </div>
@@ -305,7 +315,7 @@ function circle(cx: number, cy: number, r: number): string {
 
 export const ActivityCalendar = memo(ActivityCalendarImpl);
 
-function CalendarTip(p: Props & { tip: Tip; width: number }) {
+function CalendarTip(p: Props & { tip: Tip }) {
   const { series, ctx, sensor, tip } = p;
   const day = tip.day;
   const i = day - series.refStart;
@@ -314,7 +324,13 @@ function CalendarTip(p: Props & { tip: Tip; width: number }) {
   const lv = sensor === 'ref' && i >= 0 ? series.level[i] : -1;
   const base = sensor === 'ref' ? series.baselineAt?.(day) ?? null : null;
   const driver = sensor === 'ref' && i >= 0 && series.driver[i] >= 0 && p.memberNames.length > 1 ? p.memberNames[series.driver[i]] : null;
-  const left = Math.min(tip.x + 14, p.width - 250);
+  // Next to the pointer; flipped to its left or above it when it would not fit in the window.
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  const pos: CSSProperties = {
+    ...(tip.x + 14 + 290 > vw ? { right: Math.max(4, vw - tip.x + 14) } : { left: tip.x + 14 }),
+    ...(tip.y + 16 + 250 > vh ? { bottom: vh - tip.y + 12 } : { top: tip.y + 16 }),
+  };
   if (sensor === 'ref' && i < 0 && series.era) {
     // A day of the MODIS era: an estimate, with its own internal anomaly and no current alert.
     const era = series.era;
@@ -322,7 +338,7 @@ function CalendarTip(p: Props & { tip: Tip; width: number }) {
     const err = era.errorPct[month];
     const el = era.level[day];
     return (
-      <div className="cal-tip" style={{ left: Math.max(4, left), top: tip.y + 16 }}>
+      <div className="cal-tip" style={pos}>
         <div className="tip-title">{formatDay(day)}</div>
         {ctx.eraNoData[day] ? (
           <div className="tip-row warn">No MODIS data on this day. Not a zero.</div>
@@ -355,7 +371,7 @@ function CalendarTip(p: Props & { tip: Tip; width: number }) {
     );
   }
   return (
-    <div className="cal-tip" style={{ left: Math.max(4, left), top: tip.y + 16 }}>
+    <div className="cal-tip" style={pos}>
       <div className="tip-title">{formatDay(day)}</div>
       {sensor === 'ref' && st === STATUS_NODATA ? (
         <div className="tip-row warn">No data — neither S-NPP nor NOAA-20 had observations. Not a zero.</div>

@@ -504,8 +504,100 @@ a.chip:hover { text-decoration: none; }
 .numbered li { margin: 8px 0; }
 .footer { max-width: 1040px; margin: 20px auto 0; padding: 22px 24px 34px; border-top: 1px solid var(--line); display: grid; gap: 4px; font-size: 13px; color: var(--text-2); }
 
+/* ---------------------------------------------------------------- calmer layout
+   One section visible at a time (tabs), one toolbar instead of stacked control cards, long explanations
+   behind an "i" button, and fewer boxes inside boxes. Placed after the base rules so it refines them. */
+
+/* The fixed notice stays on every page, as a quiet line instead of an orange band. */
+.notice { background: var(--bg-2); border-bottom: 1px solid var(--line); color: var(--muted); font-size: 12px; }
+.notice b { color: var(--text-2); }
+.notice .icon { color: var(--muted); }
+
+.explore-panel { padding: 22px 28px 34px; }
+.explore-panel > * + * { margin-top: 18px; }
+
+/* The calendar tooltip is fixed to the window (placed from the pointer in ActivityCalendar), so a scrolled
+   calendar does not shift it and a short one-year calendar does not get an inner scrollbar. */
+.cal-tip { position: fixed; z-index: 60; }
+
+/* Card headers wrap at any width: when the title and its controls do not fit on one row, the controls go
+   to the next row instead of squeezing the title into narrow lines. */
+.card-head { flex-wrap: wrap; }
+.card-head > div:first-child { flex: 1 1 240px; min-width: 0; }
+.card-actions { margin-left: auto; max-width: 100%; }
+.card-buttons { flex-wrap: wrap; justify-content: flex-end; }
+
+/* Buttons: one filled action per card (CSV); everything else is quiet. */
+.btn.quiet { background: transparent; border-color: transparent; color: var(--text-2); padding: 6px 10px; font-weight: 500; }
+.btn.quiet:hover, .btn.quiet.on { background: var(--panel-2); color: var(--text); text-decoration: none; }
+.btn.ghost { background: transparent; border-color: var(--line-2); color: var(--text-2); font-weight: 500; }
+.btn.ghost:hover { color: var(--text); }
+
+/* Cards: flatter, more air, neutral title icons (orange is kept for data and the main action). */
+.card { background: var(--panel); border-color: var(--line); padding: 20px 22px; }
+.card-head { margin-bottom: 16px; }
+.card-head h3 { font-size: 16px; }
+.card-head h3 .icon { color: var(--muted); }
+.card-sub { margin-top: 4px; font-size: 13px; }
+.info-btn { display: inline-grid; place-items: center; width: 22px; height: 22px; margin-left: 2px; padding: 0; border: 0; border-radius: 50%; background: none; color: var(--muted); cursor: pointer; }
+.info-btn:hover, .info-btn.on { color: var(--cyan); background: rgba(90, 209, 255, 0.1); }
+.info-btn .icon { color: inherit !important; vertical-align: 0; }
+.card-info { margin: -6px 0 16px; padding: 10px 12px; border-left: 2px solid var(--line-2); background: var(--bg-2); border-radius: 0 8px 8px 0; color: var(--text-2); font-size: 12.5px; max-width: 78ch; }
+
+/* Area header: the name of the place is the page title; no box around it. */
+.area-head { padding: 2px 0 0; border: 0; background: none; gap: 10px; }
+.area-title h2 { font-size: 28px; letter-spacing: -0.02em; }
+.area-title p { font-size: 13px; }
+.area-actions { gap: 2px; }
+
+/* One toolbar: calendar view, dates, and "Display" for the sensor and color options. */
+.query { padding: 0; }
+.range-row { align-items: center; }
+.view-dates { margin-left: 4px; }
+.display-btn { margin-left: auto; }
+.display-current { margin-left: 2px; padding: 1px 8px; border-radius: 999px; background: var(--panel-2); border: 1px solid var(--line-2); color: var(--text-2); font-size: 11.5px; }
+.range-row.options { border-top: 0; padding: 12px; border-radius: 11px; background: var(--bg-2); border: 1px solid var(--line); }
+
+/* Section tabs. */
+.tabs { display: flex; gap: 22px; border-bottom: 1px solid var(--line); margin-top: 6px !important; overflow-x: auto; scrollbar-width: none; }
+.tabs::-webkit-scrollbar { display: none; }
+.tabs button { position: relative; display: inline-flex; align-items: center; gap: 7px; padding: 10px 0 11px; border: 0; background: none; color: var(--muted); font-size: 13.5px; font-weight: 550; cursor: pointer; white-space: nowrap; }
+.tabs button:hover { color: var(--text); }
+.tabs button.on { color: var(--text); }
+.tabs button.on::after { content: ''; position: absolute; left: 0; right: 0; bottom: -1px; height: 2px; border-radius: 2px; background: var(--accent); }
+.tab-count { padding: 0 7px; border-radius: 999px; background: var(--panel-2); color: var(--text-2); font-family: var(--mono); font-size: 11px; line-height: 18px; }
+.tab-count.hot { background: rgba(255, 122, 26, 0.16); color: #ffb37a; }
+
+/* Short low-confidence warning next to the calendar (the full text is in Data notes). */
+.confidence-note { display: flex; gap: 9px; align-items: flex-start; padding: 10px 14px; border-radius: 11px; font-size: 12.5px; color: #f3dcc4; background: rgba(255, 122, 26, 0.07); border: 1px solid rgba(255, 122, 26, 0.25); }
+.confidence-note .icon { color: var(--accent); margin-top: 2px; }
+.confidence-note b { color: #ffd2a8; }
+
+/* Key figures: one strip with dividers instead of five boxes. */
+.kpis { gap: 0; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px 6px; }
+.kpi { background: none; border: 0; border-radius: 0; padding: 0 16px; border-left: 1px solid var(--line); }
+.kpi:first-child { border-left: 0; }
+.kpi-label { font-size: 12px; }
+.kpi-val { font-size: 22px; margin: 4px 0 2px; }
+
+/* Overview. */
+.hero { padding: 10px 0 6px; }
+.hero h1 { margin: 12px 0 12px; }
+.hero p { font-size: 15px; max-width: 58ch; margin-bottom: 18px; }
+.hero .hero-hint { margin: 12px 0 14px; font-size: 13px; color: var(--muted); max-width: none; }
+.hero .hero-hint .link-btn { font-size: inherit; }
+.eyebrow { font-size: 11.5px; letter-spacing: 0.06em; color: var(--muted); }
+.eyebrow .icon { color: var(--accent); }
+.suggest-btn { background: transparent; }
+.nat-total { gap: 0; margin-bottom: 16px; }
+.nat-total > div { background: none; border: 0; border-radius: 0; padding: 0 18px; border-left: 1px solid var(--line); }
+.nat-total > div:first-child { padding-left: 0; border-left: 0; }
+.nat-total b { font-size: 26px; }
+
 /* ---------------------------------------------------------------- responsive */
 @media (max-width: 1280px) {
+  .kpis { row-gap: 16px; }
+  .kpi:nth-child(3n + 1) { border-left: 0; }
   .kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .season-grid { grid-template-columns: 1fr; }
   .tool span { display: none; }
@@ -531,6 +623,14 @@ a.chip:hover { text-decoration: none; }
   .notice { justify-content: flex-start; padding: 7px 16px; font-size: 12px; }
   .explore-panel { padding: 14px 16px; }
   .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .kpi:nth-child(3n + 1) { border-left: 1px solid var(--line); }
+  .kpi:nth-child(2n + 1) { border-left: 0; }
+  .card { padding: 16px; }
+  .card-head { flex-wrap: wrap; }
+  .card-buttons { flex-wrap: wrap; }
+  .tabs { gap: 18px; }
+  .display-btn { margin-left: 0; }
+  .area-title h2 { font-size: 24px; }
   .steps { grid-template-columns: 1fr; }
   .di-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .dept-rank button { grid-template-columns: minmax(0, 1fr) 54px 92px; }
