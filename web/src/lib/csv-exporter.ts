@@ -10,6 +10,14 @@ import { dayParts, dayToISO, formatMonth, isoToDay, monthIndexOfDay } from './da
 
 const STATUS = ['snpp', 'n20_fill', 'no_data'];
 const SENSOR = ['VIIRS_SNPP', 'VIIRS_N20', ''];
+/** Value of estimate_confidence for the MODIS-era rows, by the test status of the area. VIIRS rows are 'observed'. */
+const ESTIMATE_CONFIDENCE: Record<string, string> = {
+  ok: 'tested_within_margin',
+  low_confidence: 'low_confidence',
+  viirs_only: 'low_confidence_failed_test',
+  insufficient: 'low_confidence_too_few_detections',
+  not_tested: 'low_confidence_not_tested_at_this_scale',
+};
 
 function esc(v: string | number | null | undefined): string {
   if (v === null || v === undefined) return '';
@@ -21,7 +29,7 @@ function toCsv(header: string[], rows: (string | number | null)[][]): string {
   return [header, ...rows].map((r) => r.map(esc).join(',')).join('\r\n') + '\r\n';
 }
 
-function slug(area: Area): string {
+export function slug(area: Area): string {
   return area.label.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-zA-Z0-9]+/g, '_').replace(/^_|_$/g, '').toLowerCase();
 }
 
@@ -103,6 +111,8 @@ export function dailyCsv(area: Area, s: AreaSeries, ctx: RefContext, from: numbe
   const codes = area.members.map((m) => m.mpio).join(' ');
   const rows: (string | number | null)[][] = [];
   const first = s.era ? Math.max(0, Math.min(from, a)) : a;
+  // How far the estimate of this area was tested (docs/HARMONIZATION.md Parts 4 and 5), on every MODIS-era row.
+  const confidence = s.era ? ESTIMATE_CONFIDENCE[s.era.status] : '';
   if (s.era) {
     for (let day = first; day <= Math.min(to, s.refStart - 1); day++) {
       const lv = s.era.level[day];
@@ -113,6 +123,7 @@ export function dailyCsv(area: Area, s: AreaSeries, ctx: RefContext, from: numbe
         lv < 0 ? 'none' : levelInfo(lv).key, lv < 0 ? '' : 'modis_era_internal',
         gap ? 'no_data' : 'modis_rescaled_estimated', 'MODIS_C61', 'false',
         null, s.modis[day] ?? 0,
+        confidence, s.era.errorPct[dayParts(day).m] ?? null,
       ]);
     }
   }
@@ -126,11 +137,13 @@ export function dailyCsv(area: Area, s: AreaSeries, ctx: RefContext, from: numbe
       lv < 0 ? 'none' : levelInfo(lv).key, lv < 0 ? '' : s.fallback[i] ? 'department_fallback' : area.kind === 'department' ? 'department' : 'municipality',
       STATUS[st] ?? '', SENSOR[st] ?? '', st === 1 ? 'true' : 'false',
       s.n21[i], s.modis[day] ?? 0,
+      'observed', null,
     ]);
   }
   const header = [
     'date', 'area', 'mpio_codes', 'hot_spots', 'hot_spots_7d', 'active_cells_1km', 'level', 'level_source',
     'status', 'sensor', 'filled', 'noaa21_hot_spots_info', 'modis_hot_spots_raw',
+    'estimate_confidence', 'estimate_test_error_pct',
   ];
   download(`burn_calendar_${slug(area)}_${dayToISO(first)}_${dayToISO(b)}_daily.csv`, toCsv(header, rows));
 }

@@ -24,6 +24,7 @@ It is meant for anyone who needs to read fire activity without processing satell
 - **Number of hot spots detected** per day, with the 7-day total and the yearly totals.
 - **Historical comparison and anomalies:** each day is compared with the same season in the other years (percentiles 75, 90 and 97.5), and each month with the median of the same month in every other year since 2003 (2003-2011 estimated from MODIS). The current month is compared with the same days of that month in those years. We use the median, not the average, so one extreme year does not hide unusual activity.
 - **Downloadable CSV:** the individual hot spot points of the search (date, time, latitude, longitude, sensor, confidence, fire radiative power), the daily series, and the monthly comparison.
+- **Downloadable images:** the calendar and the charts as PNG, with the area, the dates, the legend and the data source.
 - **Accessible color scales,** tested with color vision deficiency simulations and WCAG contrast.
 
 Coverage is **Colombia only**: 33 departments and 1,122 municipality-level areas.
@@ -114,6 +115,7 @@ We used AI assistants to build this project, and we want to be exact about how.
 **What the AI did**
 
 - **It wrote the code that carries out those decisions, almost all of it.** Claude Code (Anthropic) wrote the scripts that download, filter and aggregate the data, apply the harmonization rule, run the test and export the files, and it wrote the web application. Codex wrote the script that processes the DANE boundaries. Every AI-assisted file carries a note in its header.
+- **It drew the project logo and favicon.** They are AI-generated: Claude Code drew them in SVG code (a calendar grid with one cell burning). The web app says so on its Data page, and `web/public/favicon.svg` carries the same note. They are not an agency insignia.
 - **It wrote the documentation** from our decisions, and translated our planning documents from Spanish to English.
 - **It ran the analysis we asked for:** the exploration of the raw data, the harmonization test, the comparison with IDEAM and the accessibility checks.
 - **It helped us find what we had not considered.** When we described what we wanted, the AI pointed out gaps and open questions: details our method did not define, cases the data would hit, and places where a number could mislead (for example, comparing a half-finished month with whole months). It raised the points; we decided each one.

@@ -8,7 +8,7 @@ Static web app for the NASA Space Apps 2026 challenge "Harmonization of MODIS an
 - **History**: the month against the median of the same month in the other years since 2003 ("2.3× normal" and its percentile; 2003–2011 estimated from MODIS), a year × month seasonality matrix, the busiest years and months, and the list of unusual episodes.
 - **Data coverage**: no-data days, NOAA-20 fill days, municipalities with insufficient history (department fallback), and the fixed notice.
 - **Day inspector**: the selected day with NASA GIBS true-color imagery under the map, plus links to NASA Worldview and FIRMS to see the individual detections.
-- **CSV downloads** of the query (the individual hot spot points of the search with date, time, latitude, longitude, sensor, confidence and FRP; the daily series; by municipality; monthly vs. history) and **shareable links** (the whole view is in the URL).
+- **CSV downloads** of the query (the individual hot spot points of the search with date, time, latitude, longitude, sensor, confidence and FRP; the daily series, whose MODIS-era rows say how far the estimate was tested; by municipality; monthly vs. history), **PNG downloads** of the calendar and the charts (with the area, the dates, the legend and the data source), and **shareable links** (the whole view is in the URL).
 
 ## Run
 

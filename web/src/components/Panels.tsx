@@ -26,6 +26,35 @@ export function Card({ title, icon, actions, children, sub, className, id }: {
   );
 }
 
+/**
+ * Downloads the chart of the card it sits in (its first SVG with role="img", plus the card's legend) as a PNG.
+ * The exporter is loaded on first use, so it adds nothing to the initial page.
+ */
+export function PngButton({ filename, title, subtitle, note }: { filename: string; title: string; subtitle?: string; note?: string }) {
+  const [busy, setBusy] = useState(false);
+  return (
+    <button
+      className="btn ghost"
+      disabled={busy}
+      title="Download this chart as a PNG image"
+      onClick={async (e) => {
+        const card = e.currentTarget.closest('.card');
+        const svg = card?.querySelector<SVGSVGElement>('svg[role="img"]');
+        if (!svg) return;
+        setBusy(true);
+        try {
+          const { downloadSvgPng } = await import('../lib/png-export.ts');
+          await downloadSvgPng(svg, card ?? null, { filename, title, subtitle, note });
+        } finally {
+          setBusy(false);
+        }
+      }}
+    >
+      <Icon name="download" /> PNG
+    </button>
+  );
+}
+
 export function Segmented<T extends string>({ value, options, onChange, label }: {
   value: T; options: { value: T; label: string; title?: string }[]; onChange: (v: T) => void; label: string;
 }) {
@@ -91,6 +120,10 @@ export function RangeControls({ from, to, minDay, maxDay, onChange, sensor, onSe
     const y = clampDay(b, minDay, maxDay);
     onChange(Math.min(x, y), Math.max(x, y));
   };
+  // Typing a "From" after the current "To" (or a "To" before the "From") moves the other end and keeps the
+  // length of the range, so the date the user just typed is always the one applied.
+  const setFrom = (d: number) => set(d, d > to ? d + (to - from) : to);
+  const setTo = (d: number) => set(d < from ? d - (to - from) : from, d);
   // Draft text of the date inputs: while the user types a year, the browser reports intermediate values such
   // as 0002-05-01. Those are kept as a draft and only applied once they are a real date inside the range.
   const [draftFrom, setDraftFrom] = useState<string | null>(null);
@@ -133,7 +166,7 @@ export function RangeControls({ from, to, minDay, maxDay, onChange, sensor, onSe
             <input type="date" value={draftFrom ?? dayToISO(from)} min={dayToISO(minDay)} max={dayToISO(maxDay)}
               onChange={(e) => {
                 const v = e.target.value;
-                if (inRange(v)) { setDraftFrom(null); set(isoToDay(v), to); } else setDraftFrom(v);
+                if (inRange(v)) { setDraftFrom(null); setFrom(isoToDay(v)); } else setDraftFrom(v);
               }}
               onBlur={() => setDraftFrom(null)} />
           </label>
@@ -143,7 +176,7 @@ export function RangeControls({ from, to, minDay, maxDay, onChange, sensor, onSe
             <input type="date" value={draftTo ?? dayToISO(to)} min={dayToISO(minDay)} max={dayToISO(maxDay)}
               onChange={(e) => {
                 const v = e.target.value;
-                if (inRange(v)) { setDraftTo(null); set(from, isoToDay(v)); } else setDraftTo(v);
+                if (inRange(v)) { setDraftTo(null); setTo(isoToDay(v)); } else setDraftTo(v);
               }}
               onBlur={() => setDraftTo(null)} />
           </label>

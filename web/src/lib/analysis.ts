@@ -345,6 +345,8 @@ export function computeAreaSeries(
       est[d] = rescale(ctx.harm, d, eraWeighted[d]);
       sum += est[d];
       if (d >= 7) sum -= est[d - 7];
+      // A running sum of decimals drifts: an empty week can come out as -1e-15, shown as "-0". Snap it to zero.
+      if (sum < 1e-9) sum = 0;
       est7[d] = sum;
     }
     let hasLevels = false;
@@ -624,6 +626,36 @@ export function harmonizedYearTotals(eraDaily: ArrayLike<number> | null, refStar
   for (const [y, cd] of era) if (y < firstRefYear) out.push({ y, cd: Math.round(cd), complete: true, est: true });
   for (const t of ref) {
     out.push(t.y === firstRefYear ? { ...t, cd: t.cd + Math.round(era.get(firstRefYear) ?? 0), complete: true } : t);
+  }
+  return out;
+}
+
+/** One complete month of the MODIS era in VIIRS-equivalent units (an estimate). */
+export interface EraMonth {
+  y: number;
+  /** Calendar month, 0 = January. */
+  m: number;
+  cd: number;
+}
+
+/**
+ * Monthly totals of the MODIS era (MODIS rescaled to VIIRS units), for the months that lie entirely
+ * before the VIIRS reference starts, so no month mixes the two sensors (the same rule as the monthly history).
+ */
+export function eraMonthTotals(eraDaily: ArrayLike<number> | null, refStart: number): EraMonth[] {
+  if (!eraDaily) return [];
+  const out: EraMonth[] = [];
+  for (let y = 2003; ; y++) {
+    let stop = false;
+    for (let m = 0; m < 12; m++) {
+      const a = ymdToDay(y, m, 1);
+      const b = ymdToDay(y, m + 1, 1);
+      if (b > refStart || b > eraDaily.length) { stop = true; break; }
+      let s = 0;
+      for (let d = a; d < b; d++) s += eraDaily[d];
+      out.push({ y, m, cd: s });
+    }
+    if (stop) break;
   }
   return out;
 }

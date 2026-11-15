@@ -155,9 +155,17 @@ function ActivityCalendarImpl(p: Props) {
       labels.push(
         <text key={`t${y}`} className="cal-total" x={WIDTH - 4} y={top + MONTH_ROW + 3 * STEP + 3} textAnchor="end">{fmtInt(total)}</text>,
         <text key={`tl${y}`} className="cal-total-label" x={WIDTH - 4} y={top + MONTH_ROW + 3 * STEP + 16} textAnchor="end">
-          {`${estDays ? 'hot spots (est.)' : 'hot spots'}${nodata ? ` · ${nodata} no-data` : ''}`}
+          {estDays ? 'hot spots (est.)' : 'hot spots'}
         </text>,
       );
+      // The no-data count goes on its own line: on one line with "hot spots (est.)" it ran under the squares.
+      if (nodata) {
+        labels.push(
+          <text key={`tn${y}`} className="cal-total-label" x={WIDTH - 4} y={top + MONTH_ROW + 3 * STEP + 27} textAnchor="end">
+            {`${nodata} no-data`}
+          </text>,
+        );
+      }
       [0, 2, 4].forEach((wd) =>
         labels.push(<text key={`w${y}${wd}`} className="cal-wd" x={LEFT - 6} y={top + MONTH_ROW + wd * STEP + 9} textAnchor="end">{['Mon', '', 'Wed', '', 'Fri'][wd]}</text>),
       );

@@ -2,7 +2,7 @@
 // Monthly comparison with the historical median, seasonality matrix, and yearly totals.
 
 import { memo, useMemo, useState } from 'react';
-import type { MonthStat, YearTotal } from '../lib/analysis.ts';
+import type { EraMonth, MonthStat, YearTotal } from '../lib/analysis.ts';
 import { CELL_ZERO, binLabels, cellColor, makeBins, percentile } from '../lib/colors.ts';
 import { MONTHS_LONG, MONTHS_SHORT, formatMonth } from '../lib/dates.ts';
 import { fmtInt, fmtNum, fmtRatio } from '../lib/format.ts';
@@ -124,9 +124,17 @@ export const MonthHeadline = memo(function MonthHeadline({ row, partial }: { row
 
 // ------------------------------------------------------------------ seasonality
 
-export const SeasonalityMatrix = memo(function SeasonalityMatrix({ rows }: { rows: MonthStat[] }) {
+const NO_ERA: EraMonth[] = [];
+
+/**
+ * Year x month matrix. `era` adds the MODIS-era months (MODIS rescaled to VIIRS units), drawn hatched as
+ * estimates. The color scale and the peak month come from the observed (VIIRS) months only.
+ */
+export const SeasonalityMatrix = memo(function SeasonalityMatrix({ rows, era = NO_ERA }: { rows: MonthStat[]; era?: EraMonth[] }) {
   const [hover, setHover] = useState<MonthStat | null>(null);
-  const years = useMemo(() => [...new Set(rows.map((r) => r.y))].sort((a, b) => b - a), [rows]);
+  const [hoverEra, setHoverEra] = useState<EraMonth | null>(null);
+  const years = useMemo(() => [...new Set([...rows.map((r) => r.y), ...era.map((r) => r.y)])].sort((a, b) => b - a), [rows, era]);
+  const eraByKey = useMemo(() => new Map(era.map((r) => [`${r.y}-${r.m}`, r])), [era]);
   const bins = useMemo(() => {
     const v = rows.map((r) => r.cd).filter((x) => x > 0).sort((a, b) => a - b);
     return makeBins(Math.max(1, percentile(v, 97)), percentile(v, 15));
@@ -142,18 +150,27 @@ export const SeasonalityMatrix = memo(function SeasonalityMatrix({ rows }: { row
   const W = L + 12 * CW;
   const H = T + years.length * CH + 2;
 
-  // Typical seasonal profile: median cell-days per calendar month across complete months.
+  // Typical seasonal profile: median hot spots per calendar month across complete months, including the
+  // MODIS-era estimates when given (the same history as the monthly comparison).
   const profile = useMemo(() => {
     return MONTHS_SHORT.map((_, m) => {
-      const v = rows.filter((r) => r.m === m && r.ok).map((r) => r.cd).sort((a, b) => a - b);
+      const v = [...rows.filter((r) => r.m === m && r.ok).map((r) => r.cd), ...era.filter((r) => r.m === m).map((r) => r.cd)]
+        .sort((a, b) => a - b);
       return v.length ? v[Math.floor((v.length - 1) / 2)] : 0;
     });
-  }, [rows]);
+  }, [rows, era]);
   const pmax = Math.max(1, ...profile);
 
   return (
     <div className="season">
-      <svg viewBox={`0 0 ${W} ${H + 44}`} width="100%" role="img" aria-label="Hot spots by year and month" onMouseLeave={() => setHover(null)}>
+      <svg viewBox={`0 0 ${W} ${H + 44}`} width="100%" role="img" aria-label="Hot spots by year and month" onMouseLeave={() => { setHover(null); setHoverEra(null); }}>
+        <defs>
+          {/* Same hatch as the activity calendar: estimated months (MODIS rescaled to VIIRS units). */}
+          <pattern id="season-est" width="4" height="4" patternUnits="userSpaceOnUse" patternTransform="rotate(-45)">
+            <line x1="0.6" y1="0" x2="0.6" y2="4" stroke="#0b0f17" strokeOpacity="0.75" strokeWidth="1.1" />
+            <line x1="1.7" y1="0" x2="1.7" y2="4" stroke="#ffffff" strokeOpacity="0.6" strokeWidth="0.9" />
+          </pattern>
+        </defs>
         {MONTHS_SHORT.map((m, i) => (
           <text key={m} x={L + i * CW + CW / 2} y={11} textAnchor="middle" className="axis">{m}</text>
         ))}
@@ -162,7 +179,19 @@ export const SeasonalityMatrix = memo(function SeasonalityMatrix({ rows }: { row
             <text x={L - 8} y={T + yi * CH + CH / 2 + 4} textAnchor="end" className="axis">{y}</text>
             {MONTHS_SHORT.map((_, m) => {
               const r = byKey.get(`${y}-${m}`);
-              if (!r) return null;
+              if (!r) {
+                const e = eraByKey.get(`${y}-${m}`);
+                if (!e) return null;
+                const x = L + m * CW + 1;
+                const yy = T + yi * CH + 1;
+                return (
+                  <g key={m} onMouseEnter={() => { setHover(null); setHoverEra(e); }}>
+                    <rect x={x} y={yy} width={CW - 2} height={CH - 2} rx={2.5} fill={e.cd >= 0.5 ? cellColor(e.cd, bins) : CELL_ZERO}
+                      className={`season-cell ${hoverEra === e ? 'hover' : ''}`} />
+                    <rect x={x} y={yy} width={CW - 2} height={CH - 2} rx={2.5} fill="url(#season-est)" pointerEvents="none" />
+                  </g>
+                );
+              }
               const isTop = r === top && r.cd > 0;
               return (
                 <rect
@@ -174,7 +203,7 @@ export const SeasonalityMatrix = memo(function SeasonalityMatrix({ rows }: { row
                   rx={2.5}
                   fill={r.cd > 0 ? cellColor(r.cd, bins) : CELL_ZERO}
                   className={`season-cell ${isTop ? 'top' : ''} ${r.ok ? '' : 'partial'} ${hover === r ? 'hover' : ''}`}
-                  onMouseEnter={() => setHover(r)}
+                  onMouseEnter={() => { setHoverEra(null); setHover(r); }}
                 />
               );
             })}
@@ -192,8 +221,13 @@ export const SeasonalityMatrix = memo(function SeasonalityMatrix({ rows }: { row
         {bins.map((b, k) => (
           <span className="lg-item" key={b}><i style={{ background: cellColor(b, bins) }} />{labels[k]}</span>
         ))}
+        {era.length > 0 && <span className="lg-item"><i className="lg-est" style={{ background: cellColor(bins[1] ?? 1, bins) }} />estimated (MODIS)</span>}
         <span className="chart-readout">
-          {hover ? (
+          {hoverEra ? (
+            <>
+              <strong>{MONTHS_LONG[hoverEra.m]} {hoverEra.y}</strong> · ≈ {fmtInt(Math.round(hoverEra.cd))} hot spots · MODIS rescaled to VIIRS units (estimated)
+            </>
+          ) : hover ? (
             <>
               <strong>{formatMonth(hover.mo, true)}</strong> · {fmtInt(hover.cd)} hot spots · {hover.ad} active days
               {hover.ratio !== null && <> · {fmtRatio(hover.ratio)} the median</>}

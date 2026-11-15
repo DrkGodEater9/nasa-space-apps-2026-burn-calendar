@@ -6,7 +6,7 @@ import type { BootData } from '../lib/data.ts';
 import { loadDept } from '../lib/data.ts';
 import type { Area, ColorMode, MapTool, Sensor } from '../lib/types.ts';
 import {
-  computeAreaSeries, findEpisodes, harmonizedYearTotals, modisYearTotals, municipalLevelsAt, nationalAt, nationalMonthly,
+  computeAreaSeries, eraMonthTotals, findEpisodes, harmonizedYearTotals, modisYearTotals, municipalLevelsAt, nationalAt, nationalMonthly,
   summarizeRange, yearTotals, type IndexedDept, type RangeSummary,
 } from '../lib/analysis.ts';
 import {
@@ -14,7 +14,7 @@ import {
 } from '../lib/geo.ts';
 import { clampDay, dayParts, dayToISO, formatDay, isValidIso, isoToDay, monthIndexOfDay, ymdToDay } from '../lib/dates.ts';
 import { imageryForDay } from '../lib/imagery.ts';
-import { dailyCsv, memberCsv, monthlyCsv, pointsCsv } from '../lib/csv-exporter.ts';
+import { dailyCsv, memberCsv, monthlyCsv, pointsCsv, slug } from '../lib/csv-exporter.ts';
 import { fmtInt } from '../lib/format.ts';
 import { MapView } from '../components/MapView.tsx';
 import { DayInspector } from '../components/DayInspector.tsx';
@@ -22,7 +22,7 @@ import { NationalOverview } from '../components/NationalOverview.tsx';
 import { AreaMembers, AreaPicker } from '../components/AreaPicker.tsx';
 import { ActivityCalendar, SENSOR_START, valueAt } from '../components/ActivityCalendar.tsx';
 import { MonthHeadline, MonthlyChart, SeasonalityMatrix, TopMonths, YearBars } from '../components/Charts.tsx';
-import { Card, DataQuality, Episodes, Kpis, RangeControls, viewCaption, viewOf } from '../components/Panels.tsx';
+import { Card, DataQuality, Episodes, Kpis, PngButton, RangeControls, viewCaption, viewOf } from '../components/Panels.tsx';
 import { Icon } from '../components/Icon.tsx';
 
 const COLOMBIA_BOUNDS: [number, number, number, number] = [-79.2, -4.3, -66.8, 12.6];
@@ -146,6 +146,7 @@ export function ExplorePage({ boot, params, onParams }: Props) {
     () => (series ? harmonizedYearTotals(series.era ? series.era.est : null, refStart, yearTotals(series.monthly)) : []),
     [series, refStart],
   );
+  const eraMonths = useMemo(() => (series?.era ? eraMonthTotals(series.era.est, refStart) : []), [series, refStart]);
   const natYearTotals = useMemo(() => harmonizedYearTotals(ctx.nationalEra, refStart, yearTotals(natMonthly)), [ctx, refStart, natMonthly]);
   const modisTotals = useMemo(() => (series && sensor === 'modis' ? modisYearTotals(series.modis) : []), [series, sensor]);
   const refSummary = useMemo(() => (series ? summarizeRange(series, ctx, Math.max(from, refStart), to) : null), [series, ctx, from, to, refStart]);
@@ -319,6 +320,15 @@ export function ExplorePage({ boot, params, onParams }: Props) {
                   icon="calendar"
                   sub={<>{viewCaption(viewOf(viewFrom, to, minDay, refEnd), viewFrom, to)}<br />Each square is one day · {sensor === 'ref' ? (hasEra ? 'hot spots, harmonized MODIS + VIIRS (hatched days are estimates)' : 'hot spots (VIIRS reference)') : sensorLabel}{years > 1 ? ' · click a year to open only that year' : ''}</>}
                   actions={
+                    <div className="card-buttons">
+                    <PngButton
+                      filename={`burn_calendar_${slug(area)}_${dayToISO(viewFrom)}_${dayToISO(to)}_calendar.png`}
+                      title={`Activity calendar · ${area.label}`}
+                      subtitle={`${formatDay(viewFrom, false)} – ${formatDay(to, false)} · ${sensor === 'ref' ? 'hot spots per day, harmonized calendar' : sensorLabel}`}
+                      note={hasEra && viewFrom < refStart
+                        ? `Hatched days (before ${formatDay(refStart, false)}) are MODIS rescaled to VIIRS units: estimates, not observations.${series.era && series.era.status !== 'ok' ? ' Low confidence for this area (see Data coverage and caveats).' : ''}`
+                        : undefined}
+                    />
                     <div className="menu-wrap">
                       <button className="btn primary" onClick={() => setCsvMenu(!csvMenu)} aria-expanded={csvMenu}>
                         <Icon name="download" /> CSV
@@ -331,7 +341,7 @@ export function ExplorePage({ boot, params, onParams }: Props) {
                             </button>
                           )}
                           <button role="menuitem" onClick={() => { dailyCsv(area, series, ctx, hasEra ? viewFrom : Math.max(from, refStart), to); setCsvMenu(false); }}>
-                            <b>Daily series</b><small>One row per day: hot spots, 7-day total, level, sensor, gaps{hasEra ? ', estimated days marked' : ''}</small>
+                            <b>Daily series</b><small>One row per day: hot spots, 7-day total, level, sensor, gaps{hasEra ? ', estimated days marked with how far the estimate was tested' : ''}</small>
                           </button>
                           {area.members.length > 1 && (
                             <button role="menuitem" onClick={() => { memberCsv(area, series, Math.max(from, refStart), to); setCsvMenu(false); }}>
@@ -343,6 +353,7 @@ export function ExplorePage({ boot, params, onParams }: Props) {
                           </button>
                         </div>
                       )}
+                    </div>
                     </div>
                   }
                 >
@@ -370,14 +381,34 @@ export function ExplorePage({ boot, params, onParams }: Props) {
                   </Card>
                 )}
 
-                <Card title="This month vs. normal" icon="chart" sub="Monthly hot spots in the selected dates against the median of the same month in the other years since 2003: VIIRS from 2012, MODIS rescaled to VIIRS units (estimated) for 2003–2011.">
+                <Card title="This month vs. normal" icon="chart"
+                  actions={rangeMonths.length > 1 ? (
+                    <PngButton
+                      filename={`burn_calendar_${slug(area)}_${dayToISO(viewFrom)}_${dayToISO(to)}_monthly.png`}
+                      title={`Monthly hot spots vs. normal · ${area.label}`}
+                      subtitle={`${formatDay(Math.max(viewFrom, refStart), false)} – ${formatDay(to, false)} · dashed line: median of the same month in the other years since 2003`}
+                      note={series.era ? 'The median uses 2003–2011 MODIS rescaled to VIIRS units (estimates).' : undefined}
+                    />
+                  ) : undefined}
+                  sub="Monthly hot spots in the selected dates against the median of the same month in the other years since 2003: VIIRS from 2012, MODIS rescaled to VIIRS units (estimated) for 2003–2011.">
                   <MonthHeadline row={headlineMonth} partial={partialMonth} />
                   {rangeMonths.length > 1 && <MonthlyChart rows={rangeMonths} />}
                 </Card>
 
-                <Card title="When does it burn?" icon="layers" sub="Every month since 2012 (VIIRS). Darker is quieter, brighter is more active. The bars below show the typical month.">
+                <Card title="When does it burn?" icon="layers"
+                  actions={
+                    <PngButton
+                      filename={`burn_calendar_${slug(area)}_seasonality.png`}
+                      title={`When does it burn? · ${area.label}`}
+                      subtitle="Hot spots per month, every year on record"
+                      note={eraMonths.length ? 'Hatched months (2003–2011) are MODIS rescaled to VIIRS units: estimates, not observations.' : undefined}
+                    />
+                  }
+                  sub={eraMonths.length
+                  ? 'Every month since 2003: VIIRS from 2012, MODIS rescaled to VIIRS units for 2003–2011 (hatched, estimates). Darker is quieter, brighter is more active. The bars below show the typical month.'
+                  : 'Every month since 2012 (VIIRS). Darker is quieter, brighter is more active. The bars below show the typical month.'}>
                   <div className="season-grid">
-                    <SeasonalityMatrix rows={series.monthly} />
+                    <SeasonalityMatrix rows={series.monthly} era={eraMonths} />
                     <div className="season-side">
                       <h4>Busiest years</h4>
                       <YearBars

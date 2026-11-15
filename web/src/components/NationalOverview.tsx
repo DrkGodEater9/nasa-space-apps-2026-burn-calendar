@@ -11,7 +11,7 @@ import type { GeoIndex } from '../lib/geo.ts';
 import { AreaPicker } from './AreaPicker.tsx';
 import { MonthlyChart, YearBars } from './Charts.tsx';
 import { Icon } from './Icon.tsx';
-import { Card } from './Panels.tsx';
+import { Card, PngButton } from './Panels.tsx';
 
 interface Props {
   geo: GeoIndex;
@@ -103,7 +103,16 @@ export const NationalOverview = memo(function NationalOverview(p: Props) {
         <button className="link-btn" onClick={() => setShowAll(!showAll)}>{showAll ? 'Show top 10' : 'Show all 33 departments'}</button>
       </Card>
 
-      <Card title="National activity, last 36 months" icon="chart" sub="Hot spots per month, all 33 departments (VIIRS reference). The dashed line is the median of the same month in the other years since 2003 (2003–2011 estimated from MODIS); orange months are above the 90th percentile of their history.">
+      <Card title="National activity, last 36 months" icon="chart"
+        actions={
+          <PngButton
+            filename="burn_calendar_colombia_last_36_months.png"
+            title="Colombia · national hot spots, last 36 months"
+            subtitle="Hot spots per month (VIIRS reference) · dashed line: median of the same month in the other years since 2003"
+            note="The median uses 2003–2011 MODIS rescaled to VIIRS units (estimates)."
+          />
+        }
+        sub="Hot spots per month, all 33 departments (VIIRS reference). The dashed line is the median of the same month in the other years since 2003 (2003–2011 estimated from MODIS); orange months are above the 90th percentile of their history.">
         <MonthlyChart rows={last36} />
       </Card>
 
