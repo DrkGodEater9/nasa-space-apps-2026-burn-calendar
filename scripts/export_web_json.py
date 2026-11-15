@@ -72,7 +72,9 @@ def monthly_columns(df: pd.DataFrame, idx: pd.Series) -> dict:
     return {
         "m": idx.tolist(), "mo": month_index(df["month"]), "cd": df["cell_days"].astype(int).tolist(),
         "ad": df["active_days"].astype(int).tolist(), "nd": df["no_data_days"].astype(int).tolist(),
-        "ok": df["month_complete"].astype(int).tolist(), "med": nums(df["hist_median_cell_days"], 1),
+        "ok": df["month_complete"].astype(int).tolist(),
+        "d1": df["compare_first_day"].astype(int).tolist(), "d2": df["compare_last_day"].astype(int).tolist(),
+        "med": nums(df["hist_median_cell_days"], 1),
         "ratio": nums(df["ratio_vs_median"], 2), "pct": nums(df["percentile_vs_history"], 1),
     }
 
@@ -93,8 +95,10 @@ def main() -> None:
 
     # ---- status.json: one code per day of the continuous reference range
     s = status.sort_values("date")
+    national_cells = ref.groupby("date")["active_cells"].sum().reindex(s["date"], fill_value=0).astype(int)
     dump({"start": str(s["date"].iloc[0]), "end": str(s["date"].iloc[-1]),
-          "legend": STATUS, "status": s["status"].map({n: i for i, n in enumerate(STATUS)}).astype(int).tolist()},
+          "legend": STATUS, "status": s["status"].map({n: i for i, n in enumerate(STATUS)}).astype(int).tolist(),
+          "cells": national_cells.tolist()},
          OUT / "status.json")
 
     # ---- departments.json: department-level alerts and monthly (fallback for municipalities with little history)

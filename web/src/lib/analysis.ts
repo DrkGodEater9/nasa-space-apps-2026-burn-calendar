@@ -83,18 +83,24 @@ export interface RefContext {
   refEnd: number;
   /** Status code per reference day: 0 S-NPP, 1 NOAA-20 fill, 2 no data. */
   status: Int8Array;
+  /** National active cells per reference day (sum of all municipalities), or null with an older status.json. */
+  nationalCells: Int32Array | null;
 }
 
 export function makeRefContext(range: [string, string], statusFile: StatusFile): RefContext {
   const refStart = isoToDay(range[0]);
   const refEnd = isoToDay(range[1]);
   const status = new Int8Array(refEnd - refStart + 1).fill(-1);
+  const nationalCells = statusFile.cells ? new Int32Array(refEnd - refStart + 1) : null;
   const off = isoToDay(statusFile.start) - refStart;
   statusFile.status.forEach((s, i) => {
     const k = i + off;
-    if (k >= 0 && k < status.length) status[k] = s;
+    if (k >= 0 && k < status.length) {
+      status[k] = s;
+      if (nationalCells && statusFile.cells) nationalCells[k] = statusFile.cells[i];
+    }
   });
-  return { refStart, refEnd, status };
+  return { refStart, refEnd, status, nationalCells };
 }
 
 export const STATUS_SNPP = 0;
@@ -125,6 +131,9 @@ export interface MonthStat {
   nd: number;
   days: number;
   ok: boolean;
+  /** Day-of-month range covered (and compared): 1..days in month for complete months. */
+  d1: number;
+  d2: number;
   med: number | null;
   ratio: number | null;
   pct: number | null;
@@ -294,8 +303,9 @@ function median(values: number[]): number | null {
 }
 
 /**
- * Monthly totals and the comparison with the same calendar month in the other years
- * (complete months only), as in `monthly_municipio` (DATA_CONTRACT.md).
+ * Monthly totals and the comparison with the same calendar month in the other years, as in
+ * `monthly_municipio` (DATA_CONTRACT.md): complete months against complete months, and a partial
+ * month (the current one) against the same days of that month in the other years.
  */
 export function computeMonthly(cells: Int32Array, ctx: RefContext): MonthStat[] {
   const { refStart, refEnd, status } = ctx;
@@ -319,15 +329,44 @@ export function computeMonthly(cells: Int32Array, ctx: RefContext): MonthStat[] 
       mo, y, m, cd, ad, nd,
       days: Math.min(b, refEnd) - Math.max(a, refStart) + 1,
       ok: a >= refStart && b <= refEnd,
+      d1: Math.max(a, refStart) - a + 1,
+      d2: Math.min(b, refEnd) - a + 1,
       med: null, ratio: null, pct: null, histYears: 0,
     });
   }
-  return addHistory(rows);
+  return addHistory(rows, { cells, refStart, refEnd });
 }
 
-export function addHistory(rows: MonthStat[]): MonthStat[] {
+/** A daily series indexed by day - refStart, used to compare partial months day for day. */
+export interface DailySeries {
+  cells: ArrayLike<number>;
+  refStart: number;
+  refEnd: number;
+}
+
+/** Sums of the same days of the month (row.d1..row.d2) in every other year fully inside the series. */
+function sameDaysHistory(row: MonthStat, rows: MonthStat[], daily: DailySeries): number[] {
+  const out: number[] = [];
+  for (const o of rows) {
+    if (o.m !== row.m || o.y === row.y) continue;
+    const a = monthFirstDay(o.mo);
+    const daysInMonth = monthFirstDay(o.mo + 1) - a;
+    const start = a + row.d1 - 1;
+    const end = a + Math.min(row.d2, daysInMonth) - 1;
+    if (start < daily.refStart || end > daily.refEnd) continue;
+    let s = 0;
+    for (let day = start; day <= end; day++) s += daily.cells[day - daily.refStart];
+    out.push(s);
+  }
+  return out;
+}
+
+export function addHistory(rows: MonthStat[], daily?: DailySeries): MonthStat[] {
   for (const row of rows) {
-    const hist = rows.filter((o) => o.m === row.m && o.y !== row.y && o.ok).map((o) => o.cd);
+    // A partial month is never compared with whole months. Without a daily series it gets no comparison.
+    const hist = row.ok
+      ? rows.filter((o) => o.m === row.m && o.y !== row.y && o.ok).map((o) => o.cd)
+      : daily ? sameDaysHistory(row, rows, daily) : [];
     row.histYears = hist.length;
     row.med = median(hist);
     // Kept unrounded; the pipeline rounds to 1 and 2 decimals (Python half-to-even) for storage.
@@ -486,10 +525,13 @@ export function nationalMonthly(national: IndexedNational, ctx: RefContext): Mon
       mo, y, m, cd: cd[mo - firstMo], ad: 0, nd: 0,
       days: Math.min(b, ctx.refEnd) - Math.max(a, ctx.refStart) + 1,
       ok: a >= ctx.refStart && b <= ctx.refEnd,
+      d1: Math.max(a, ctx.refStart) - a + 1,
+      d2: Math.min(b, ctx.refEnd) - a + 1,
       med: null, ratio: null, pct: null, histYears: 0,
     });
   }
-  return addHistory(rows);
+  const daily = ctx.nationalCells ? { cells: ctx.nationalCells, refStart: ctx.refStart, refEnd: ctx.refEnd } : undefined;
+  return addHistory(rows, daily);
 }
 
 /** Per-municipality level and 7-day cells on one day, for the map. */

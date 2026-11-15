@@ -62,8 +62,9 @@ One row per municipality (or department) and month, for every month in the refer
 | `active_days` | Days with at least one active cell |
 | `no_data_days` | Days flagged `no_data` |
 | `month_complete` | False for the first and last partial months |
-| `history_years` | Complete same-month years used as history |
-| `hist_median_cell_days` | Median `cell_days` of the same month in other years |
+| `compare_first_day`, `compare_last_day` | Day-of-month range covered and compared (1 to the last day for complete months; for example 1-13 for the current month) |
+| `history_years` | Other years used as history (complete months, or the same days for a partial month) |
+| `hist_median_cell_days` | Median `cell_days` of the same month in other years. **For a partial month, the median over the same days of the month** (never whole months) |
 | `ratio_vs_median` | `cell_days / hist_median_cell_days` ("2.3x normal"); empty if the median is 0 |
 | `percentile_vs_history` | Percent of historical months with `cell_days` less than or equal to this one |
 
@@ -79,7 +80,7 @@ For a static web app that cannot read Parquet. Built by `python scripts/export_w
 | File | Content |
 |---|---|
 | `manifest.json` | Departments (code, name, file, bytes), `levels`, `status_legend`, date bases, the fixed notice, alert parameters |
-| `status.json` | One status code per day of the reference series (`start`, `end`, `legend`, `status[]`) |
+| `status.json` | One status code per day of the reference series (`start`, `end`, `legend`, `status[]`), and `cells[]`, the national active cells per day (used to compare a partial month day for day at national level) |
 | `departments.json` | Department-level `alerts` and `monthly` for all 33 departments (the fallback for municipalities with insufficient history) |
 | `departments/<code>.json` | One department: `municipalities`, `daily`, `other_sensors`, `alerts`, `monthly` |
 
@@ -89,7 +90,7 @@ Format rules:
 - **`m` is a position** in that department's `municipalities` array (in `departments.json`, a position in its `departments` array).
 - **Level codes** `l` index into `manifest.levels`: `normal`, `elevated`, `unusual`, `extreme`, `insufficient`. Status codes index into `status_legend`: `snpp`, `n20_fill`, `no_data`.
 - **Sparse:** `daily` has only rows with activity (a missing municipality-day is zero, unless the day is `no_data`). `municipalities` lists every area of the department, including those with no activity.
-- **Columns:** `daily` is `m, d, c` (active cells). `alerts` is `m, d, c` (7-day cells), `p75, p90, p975, act` (baseline active days), `l`. `monthly` is `m, mo, cd` (cell days), `ad` (active days), `nd` (no-data days), `ok` (complete month, 0/1), `med`, `ratio`, `pct`. `other_sensors` is `s, m, d, c` with `legend` listing the sensors (MODIS Collection 6.1 and VIIRS NOAA-21).
+- **Columns:** `daily` is `m, d, c` (active cells). `alerts` is `m, d, c` (7-day cells), `p75, p90, p975, act` (baseline active days), `l`. `monthly` is `m, mo, cd` (cell days), `ad` (active days), `nd` (no-data days), `ok` (complete month, 0/1), `d1, d2` (day-of-month range compared), `med`, `ratio`, `pct`. `other_sensors` is `s, m, d, c` with `legend` listing the sensors (MODIS Collection 6.1 and VIIRS NOAA-21).
 - **Missing numbers are null.**
 - **Size:** about 41 MB raw in total, but each department file is 0.06 to 0.5 MB once gzipped, which static hosts do automatically. Load only the departments the user selects.
 

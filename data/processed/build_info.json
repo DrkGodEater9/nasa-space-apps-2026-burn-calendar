@@ -36,7 +36,7 @@
   ],
   "cells_outside_polygons": 3505,
   "ai_note": "Built by scripts/build_dataset.py, written with the help of an AI assistant (Claude Code), implementing the method decided by the Horum Labs team in docs/METHOD.md.",
-  "built_utc": "2026-11-14T16:26:36.595390+00:00",
+  "built_utc": "2026-11-15T00:52:00.815824+00:00",
   "parameters": {
     "cell_degrees": 0.01,
     "timezone": "UTC-5",

@@ -82,6 +82,26 @@ def main() -> None:
     check(mo_m["ratio_vs_median"].dropna().ge(0).all() and mo_m["percentile_vs_history"].dropna().between(0, 100).all(), "ratios >= 0 and percentiles within 0-100")
     check(not mo_m.loc[mo_m["month_complete"], "no_data_days"].gt(31).any(), "no_data_days is at most the days in a month")
 
+    # partial months must be compared with the same days of the month in other years (recomputed independently)
+    part = mo_m[~mo_m["month_complete"]]
+    dim = pd.to_datetime(part["month"]).dt.days_in_month
+    check(len(part) > 0 and ((part["compare_first_day"] > 1) | (part["compare_last_day"] < dim)).all(),
+          "partial months carry the day range that was compared")
+    last_month = pd.to_datetime(mo_m["month"]).max()
+    row = mo_m[(pd.to_datetime(mo_m["month"]) == last_month) & (mo_m["mpio_code"] == "99773")]
+    if len(row) == 1 and not bool(row["month_complete"].iloc[0]):
+        r0 = row.iloc[0]
+        rd = ref[ref["mpio_code"] == "99773"].assign(dt=lambda x: pd.to_datetime(x["date"]))
+        first_ref = pd.to_datetime(status["date"]).min()
+        sums = []
+        for y in range(first_ref.year, last_month.year):
+            a = pd.Timestamp(y, last_month.month, int(r0["compare_first_day"]))
+            b = pd.Timestamp(y, last_month.month, int(r0["compare_last_day"]))
+            if a >= first_ref:
+                sums.append(int(rd.loc[rd["dt"].between(a, b), "active_cells"].sum()))
+        check(abs(float(np.median(sums)) - float(r0["hist_median_cell_days"])) < 0.01 and len(sums) == int(r0["history_years"]),
+              f"current partial month (Cumaribo, days {r0['compare_first_day']}-{r0['compare_last_day']}) uses the same days in {len(sums)} other years")
+
     # static-source mask must catch Galeras and the biggest known fixed sources
     mask = t["static_source_mask"]
     near = mask[(mask["lat"].between(1.15, 1.29)) & (mask["lon"].between(-77.43, -77.31))]

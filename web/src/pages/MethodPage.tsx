@@ -104,7 +104,7 @@ export function MethodPage() {
             <li>At least <b>3 active cells</b> are needed to call a week unusual or extreme.</li>
             <li>If a municipality had fewer than <b>10 active days</b> in its baseline season, its history is too short: the calendar shows the department level instead and says so.</li>
             <li>A window with 4 or more no-data days is not rated.</li>
-            <li>The month is compared with the <b>median of the same month</b> in other years ("2.3× normal") and its percentile.</li>
+            <li>The month is compared with the <b>median of the same month</b> in other years ("2.3× normal") and its percentile. The current, unfinished month is compared with the <b>same days</b> of that month in the other years (for example days 1–13), never with whole months.</li>
           </ul>
         </div>
         <div>

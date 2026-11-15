@@ -81,10 +81,12 @@ export function monthlyCsv(area: Area, s: AreaSeries, from: number, to: number) 
   const rows = s.monthly
     .filter((r) => r.mo >= moFrom && r.mo <= moTo)
     .map((r) => [
-      `${r.y}-${String(r.m + 1).padStart(2, '0')}`, formatMonth(r.mo), r.cd, r.ad, r.nd, r.ok ? 'true' : 'false', r.histYears,
+      `${r.y}-${String(r.m + 1).padStart(2, '0')}`, formatMonth(r.mo), r.cd, r.ad, r.nd, r.ok ? 'true' : 'false',
+      r.d1, r.d2, r.histYears,
       r.med, r.ratio === null ? null : Math.round(r.ratio * 100) / 100, r.pct === null ? null : Math.round(r.pct * 10) / 10,
     ]);
-  const header = ['month', 'label', 'cell_days', 'active_days', 'no_data_days', 'month_complete', 'history_years',
+  const header = ['month', 'label', 'cell_days', 'active_days', 'no_data_days', 'month_complete',
+    'compare_first_day', 'compare_last_day', 'history_years',
     'hist_median_cell_days', 'ratio_vs_median', 'percentile_vs_history'];
   download(`burn_calendar_${slug(area)}_monthly.csv`, toCsv(header, rows));
 }

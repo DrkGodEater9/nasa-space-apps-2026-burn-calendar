@@ -294,12 +294,32 @@ def monthly(keys, X: np.ndarray, dates: pd.DatetimeIndex, nodata: np.ndarray, id
     median = ratio.copy()
     pct = ratio.copy()
     hist_n = pd.Series(0, index=periods)
+    first_day = pd.Series(1, index=periods)
+    last_day = pd.Series(periods.days_in_month, index=periods)
     for p in periods:
-        others = [q for q in periods if q.month == p.month and q.year != p.year and complete[q]]
+        if complete[p]:
+            others = [q for q in periods if q.month == p.month and q.year != p.year and complete[q]]
+            base = cell_days.loc[others].to_numpy() if others else None
+        else:
+            # Partial month (the current month, or the first month of the series): compare the same days of the
+            # month in the other years, never a partial month against whole months.
+            days = dates[per == p]
+            d1, d2 = int(days.min().day), int(days.max().day)
+            first_day[p], last_day[p] = d1, d2
+            rows, others = [], []
+            for q in periods:
+                if q.month != p.month or q.year == p.year:
+                    continue
+                start = pd.Timestamp(q.year, q.month, d1)
+                end = pd.Timestamp(q.year, q.month, min(d2, q.days_in_month))
+                if start < dates[0] or end > dates[-1]:
+                    continue  # those days are not fully inside the reference range in that year
+                rows.append(z.loc[start:end].sum().to_numpy())
+                others.append(q)
+            base = np.vstack(rows) if rows else None
         hist_n[p] = len(others)
-        if not others:
+        if base is None:
             continue
-        base = cell_days.loc[others].to_numpy()
         med = np.median(base, axis=0)
         val = cell_days.loc[p].to_numpy()
         median.loc[p] = med
@@ -316,11 +336,14 @@ def monthly(keys, X: np.ndarray, dates: pd.DatetimeIndex, nodata: np.ndarray, id
     out["no_data_days"] = out["period"].map(nodata_days).astype(int)
     out["month_complete"] = out["period"].map(complete)
     out["history_years"] = out["period"].map(hist_n).astype(int)
+    out["compare_first_day"] = out["period"].map(first_day).astype(int)
+    out["compare_last_day"] = out["period"].map(last_day).astype(int)
     for c in ("cell_days", "active_days"):
         out[c] = out[c].astype(int)
     for c in ("hist_median_cell_days", "ratio_vs_median", "percentile_vs_history"):
         out[c] = out[c].round(2).astype("float32")
     return out[[id_col, "month", "cell_days", "active_days", "no_data_days", "month_complete",
+                "compare_first_day", "compare_last_day",
                 "history_years", "hist_median_cell_days", "ratio_vs_median", "percentile_vs_history"]]
 
 

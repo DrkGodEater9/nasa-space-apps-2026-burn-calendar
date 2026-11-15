@@ -112,7 +112,9 @@ export function MonthHeadline({ row, partial }: { row: MonthStat | null; partial
         {row.pct !== null && <> It is higher than or equal to <strong>{Math.round(row.pct)}%</strong> of them.</>}
         {partial && (
           <div className="headline-partial">
-            {MONTHS_LONG[partial.m]} {partial.y} so far ({partial.days} days, partial): {fmtInt(partial.cd)} cell-days · full-month median {partial.med === null ? '—' : fmtNum(partial.med)}.
+            {MONTHS_LONG[partial.m]} {partial.y} so far (days {partial.d1}–{partial.d2}, partial): {fmtInt(partial.cd)} cell-days · median of the same days in the {partial.histYears} other years {partial.med === null ? '—' : fmtNum(partial.med)}
+            {partial.ratio !== null && <> · <strong>{fmtRatio(partial.ratio)}</strong> of normal</>}
+            {partial.pct !== null && <> · higher than or equal to {Math.round(partial.pct)}% of them</>}.
           </div>
         )}
       </div>

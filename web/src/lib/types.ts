@@ -28,6 +28,8 @@ export interface StatusFile {
   end: string;
   legend: string[];
   status: number[];
+  /** National active cells per day (same index as status). */
+  cells?: number[];
 }
 
 /** Columnar blocks: one array per column, all of equal length. */

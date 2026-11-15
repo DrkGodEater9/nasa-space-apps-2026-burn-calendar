@@ -56,6 +56,23 @@ An earlier comparison that used only the text of the reports showed Casanare 202
 - **It also shows why raw counts overstate activity.** IDEAM's figure counts the same fire several times (three sensors, several pixels per fire). That is the reason the method uses cells and a per-sensor baseline.
 - **Not tested:** UTC against local date (the script uses UTC only), and the NRT data (2023-2024 is all archive). The accepted-differences list in METHOD.md still applies.
 
+## Sanity check of the newest extreme alerts
+
+On 2026-11-13 Antioquia, Norte de Santander and Santander show `extreme` 7-day levels at department level (Antioquia: 73 cells against a P97.5 of 21). Because they are the first thing a visitor sees, they were checked against data the alert does not use:
+
+1. **Independent sensors agree.** In those days the reference series is NOAA-20 (S-NPP has no data after 2026-11-01). MODIS and NOAA-21 are independent of it, and both are far above their own history for November 1-13 too. Antioquia, active cells on November 1-13:
+
+   | Sensor | 2018-2025 range | 2026 |
+   |---|---:|---:|
+   | MODIS | 0 to 6 | 19 |
+   | NOAA-20 | 2 to 40 | 84 |
+   | NOAA-21 (from 2023) | 5 to 23 | 91 |
+
+   Norte de Santander (NOAA-21: 7 to 39 before, 66 in 2026) and Santander (NOAA-21: 2 to 20 before, 47 in 2026) behave the same way. So the jump is not an effect of switching from S-NPP to NOAA-20.
+2. **No fixed heat source.** Each active cell appears on 1 day, at most 2, of the 13. A gas flare, mine or industrial source would repeat on most days. The activity is spread over many places (in Antioquia mainly Segovia, El Bagre, Yondó, Amalfi, Remedios and Zaragoza).
+
+Conclusion: the alerts look real (dispersed burning seen by three satellites), not a data error. Caveat: November 2026 comes from near-real-time data, which FIRMS later replaces with the science-quality archive, while the history is archive data.
+
 ## Open points
 
 1. Caquetá 2024 (-14.2% and -8.0%) is a **border assignment difference with Meta**, not a counting error, but its exact cause is not identified. Evidence, for the best combination:
