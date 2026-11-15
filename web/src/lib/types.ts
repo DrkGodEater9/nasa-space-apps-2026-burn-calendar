@@ -10,7 +10,7 @@ export interface DeptMeta {
 
 export type HarmonizationStatus = 'ok' | 'low_confidence' | 'viirs_only' | 'insufficient';
 
-/** Result of the team's MODIS -> VIIRS rule and its leave-one-year-out test (docs/HARMONIZATION_RESULTS.md). */
+/** Result of the team's MODIS -> VIIRS rule and its leave-one-year-out test (docs/HARMONIZATION.md). */
 export interface Harmonization {
   /** True when the national test passed. When false the sensors stay separate. */
   accepted: boolean;
@@ -28,12 +28,23 @@ export interface Harmonization {
   notice: string;
 }
 
+export interface PointsInfo {
+  /** Template relative to the web data folder, with {dpto} and {year}. */
+  path: string;
+  columns: string[];
+  first_year: number;
+  last_year: number;
+  rows: number;
+}
+
 export interface Manifest {
   notice: string;
   /** Harmonized quantity: "detections" (hot spots) or "active_cells". */
   quantity?: string;
   quantity_label?: string;
   harmonization?: Harmonization;
+  /** Individual accepted detections: one gzipped CSV per department and year. */
+  points?: PointsInfo | null;
   day_base: string;
   month_base: string;
   reference_range: [string, string];

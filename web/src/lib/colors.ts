@@ -1,10 +1,13 @@
 // Note: Implementation assisted by AI (Claude Code) following Horum Labs' methodology.
-// Color scales. The sequential scale is sampled from "inferno" (perceptually uniform and
-// readable with the common color vision deficiencies). Lightness grows with the value, so the
-// order is readable even in grayscale.
+// Color scales. The sequential scale is four classes sampled from "inferno" (perceptually uniform).
+// It was chosen with scripts/check-accessibility.ts (npm run a11y): every class differs from its
+// neighbors by at least 10 CIEDE2000 units for normal vision, protanopia, deuteranopia and
+// tritanopia, every class has at least 3:1 contrast against the panel, and lightness grows with
+// the value, so the order is readable even in grayscale. Six classes could not meet both
+// conditions on the dark background (see docs/ACCESSIBILITY.md). Do not edit without rerunning it.
 
 export const CELL_ZERO = '#1a2232';
-export const CELL_RAMP = ['#5c1a7a', '#8f2469', '#c33b4f', '#e9622c', '#fa9a12', '#f8d348'];
+export const CELL_RAMP = ['#b73557', '#eb6628', '#fcb418', '#fcffa4'];
 
 export const LEVEL_NONE = -1;
 export const LEVEL_NORMAL = 0;
@@ -25,7 +28,7 @@ export const LEVELS: LevelInfo[] = [
   { key: 'normal', label: 'Normal', color: '#3d5f8f', range: 'up to P75', text: '#dce6f5' },
   { key: 'elevated', label: 'Elevated', color: '#f2c14e', range: 'P75 – P90', text: '#231a03' },
   { key: 'unusual', label: 'Unusual', color: '#f57a28', range: 'P90 – P97.5', text: '#260f02' },
-  { key: 'extreme', label: 'Extreme', color: '#e5383b', range: 'above P97.5', text: '#fff' },
+  { key: 'extreme', label: 'Extreme', color: '#e5383b', range: 'above P97.5', text: '#1a0203' },
   { key: 'insufficient', label: 'Insufficient history', color: '#7b8494', range: '< 10 baseline active days', text: '#0d1117' },
 ];
 

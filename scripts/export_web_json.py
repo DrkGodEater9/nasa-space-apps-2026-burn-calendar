@@ -158,6 +158,8 @@ def main() -> None:
     dump({
         "notice": NOTICE, "quantity": info["parameters"]["quantity"],
         "quantity_label": "hot spots (accepted FIRMS detections)", "harmonization": harmonization,
+        # Individual accepted detections, one gzipped CSV per department and year (written by build_dataset.py).
+        "points": info.get("points"),
         "day_base": DAY_BASE.isoformat(), "month_base": f"{MONTH_BASE[0]}-{MONTH_BASE[1]:02d}",
         "reference_range": info["reference_range"], "levels": LEVELS, "status_legend": STATUS,
         "other_sensors": SENSORS_EXTRA, "windows": {"cells_window_days": 7, "season_half_width_days": 15},

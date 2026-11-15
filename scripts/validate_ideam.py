@@ -4,7 +4,7 @@ Run from the repository root (needs data/raw and the DANE boundaries):
     python scripts/validate_ideam.py
 
 IDEAM publishes SEMESTER figures only: the national total and the top-10
-departments per semester (see docs/IDEAM_REFERENCE.md). It does not state which
+departments per semester (see docs/VALIDATION.md). It does not state which
 sensors or filters it uses. So this script does not assume how IDEAM counts: it
 tries several combinations of sensors and quality filters on RAW detections (not
 1 km cells) and reports how close each one gets. Nothing is tuned to match; every

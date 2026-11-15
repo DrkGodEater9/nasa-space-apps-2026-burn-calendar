@@ -6,6 +6,11 @@ import { indexDept, indexNational, makeRefContext, type IndexedDept, type Indexe
 import { buildGeoIndex, type GeoIndex } from './geo.ts';
 
 const DATA_ROOT = `${import.meta.env.BASE_URL}data/`;
+
+/** Absolute URL of a file under public/data. */
+export function dataUrl(path: string): string {
+  return DATA_ROOT + path;
+}
 const cache = new Map<string, Promise<unknown>>();
 
 export function loadJson<T>(path: string): Promise<T> {

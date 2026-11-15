@@ -80,7 +80,7 @@ export default function App() {
           </div>
         )}
         {boot && route.page === 'explore' && <ExplorePage boot={boot} params={route.params} onParams={replaceParams} />}
-        {route.page === 'method' && <MethodPage />}
+        {route.page === 'method' && <MethodPage harm={boot?.manifest.harmonization ?? null} />}
         {route.page === 'data' && <DataPage />}
       </main>
 

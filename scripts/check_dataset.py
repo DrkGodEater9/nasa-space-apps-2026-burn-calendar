@@ -127,6 +127,26 @@ def main() -> None:
             check(era.loc[era["level"].isin(["unusual", "extreme"]), "hotspots_7d"].ge(3).all() and (eok["p75"] <= eok["p97_5"]).all(),
                   "MODIS-era anomalies follow the same alert rules")
 
+    # points CSV: the individual detections must be exactly the ones behind the calendar
+    pts_dir = P / "web" / "points"
+    if pts_dir.exists():
+        import gzip as _gzip
+        import json as _json2
+        pinfo = _json2.loads((P / "build_info.json").read_text(encoding="utf-8")).get("points", {})
+        check(pinfo.get("rows") == int(daily["detections"].sum()), "points: one row per accepted detection of the daily table")
+        dsum = daily.assign(y=pd.to_datetime(daily["date"]).dt.year, dp=daily["mpio_code"].str[:2])
+        for dp, y in (("52", 2024), ("50", 2007), ("99", 2020)):
+            f = pts_dir / dp / f"{y}.csv.gz"
+            with _gzip.open(f, "rt", encoding="utf-8") as fh:
+                pt = pd.read_csv(fh, dtype={"mpio_code": str})
+            exp = dsum[(dsum["dp"] == dp) & (dsum["y"] == y)]
+            got = pt.groupby(["mpio_code", "date", "sensor"]).size()
+            want = exp.assign(date=exp["date"].astype(str)).set_index(["mpio_code", "date", "sensor"])["detections"]
+            check(len(pt) == int(exp["detections"].sum()) and got.sort_index().equals(want.sort_index().astype(got.dtype)),
+                  f"points {dp}/{y}: rows per municipality, day and sensor match the daily table ({len(pt):,} points)")
+            check(pt["latitude"].between(-4.5, 13.5).all() and pt["longitude"].between(-82, -66).all() and pt["confidence"].isin(["nominal", "high"]).all(),
+                  f"points {dp}/{y}: coordinates inside Colombia and no low-confidence points")
+
     # static-source mask must catch Galeras and the biggest known fixed sources
     mask = t["static_source_mask"]
     near = mask[(mask["lat"].between(1.15, 1.29)) & (mask["lon"].between(-77.43, -77.31))]

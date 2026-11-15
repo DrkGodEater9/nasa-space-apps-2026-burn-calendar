@@ -252,8 +252,10 @@ function ActivityCalendarImpl(p: Props) {
               <line x1="0" y1="0" x2="0" y2="4" stroke="#5b667a" strokeWidth="1.6" />
             </pattern>
             {/* Hatch over the estimated days (MODIS rescaled to VIIRS units). */}
-            <pattern id="cal-est" width="3.6" height="3.6" patternUnits="userSpaceOnUse" patternTransform="rotate(-45)">
-              <line x1="0" y1="0" x2="0" y2="3.6" stroke="#ffffff" strokeOpacity="0.5" strokeWidth="1.1" />
+            {/* Two tones (dark next to light) so the hatch stays visible on the darkest and the lightest class. */}
+            <pattern id="cal-est" width="4" height="4" patternUnits="userSpaceOnUse" patternTransform="rotate(-45)">
+              <line x1="0.6" y1="0" x2="0.6" y2="4" stroke="#0b0f17" strokeOpacity="0.75" strokeWidth="1.1" />
+              <line x1="1.7" y1="0" x2="1.7" y2="4" stroke="#ffffff" strokeOpacity="0.6" strokeWidth="0.9" />
             </pattern>
           </defs>
           {drawing.labels}
@@ -397,8 +399,8 @@ function CalendarLegend({ bins, colorMode, sensor, markUnusual, hasEstimates }: 
       {sensor === 'ref' && (
         <div className="lg-group">
           <span className="lg-item"><i className="lg-nodata" />No data</span>
-          <span className="lg-item"><i style={{ background: CELL_RAMP[1], position: 'relative' }}><b className="lg-dot" /></i>NOAA-20 fill</span>
-          {hasEstimates && <span className="lg-item"><i className="lg-est" style={{ background: CELL_RAMP[2] }} />MODIS rescaled to VIIRS units (estimated)</span>}
+          <span className="lg-item"><i style={{ background: CELL_RAMP[0], position: 'relative' }}><b className="lg-dot" /></i>NOAA-20 fill</span>
+          {hasEstimates && <span className="lg-item"><i className="lg-est" style={{ background: CELL_RAMP[1] }} />MODIS rescaled to VIIRS units (estimated)</span>}
           {colorMode === 'cells' && markUnusual && (
             <>
               <span className="lg-item"><i className="lg-ring" />Unusual</span>

@@ -1,6 +1,6 @@
 """Leave-one-year-out test of the team's MODIS -> VIIRS harmonization rule.
 
-Implements docs/HARMONIZATION_TEST_PLAN.md exactly: one factor per calendar month at national
+Implements docs/HARMONIZATION.md exactly: one factor per calendar month at national
 scale, from the MODIS / VIIRS S-NPP overlap of 2013-2025. Nothing is tuned: the margins are
 the ones the team wrote before the test ran.
 
@@ -137,7 +137,7 @@ def evaluate(daily: pd.DataFrame, write: bool = True) -> dict:
     if write:
         out = {
             "ai_note": "Computed by scripts/harmonization_test.py (written with AI help). The rule and margins are the team's; "
-                       "see docs/HARMONIZATION_TEST_PLAN.md.",
+                       "see docs/HARMONIZATION.md.",
             "years": [YEARS[0], YEARS[-1]], "national_margin_pct": NATIONAL_MARGIN,
             "department_margin_pct": DEPARTMENT_MARGIN, "min_observed_for_department_month": MIN_OBSERVED,
             "quantity_with_lower_national_error": winner, "results": summary,

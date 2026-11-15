@@ -23,7 +23,7 @@ const SOURCES = [
   {
     tag: 'DANE',
     name: 'Marco Geoestadístico Nacional 2018',
-    what: 'Department and municipality boundaries (1,122 municipality-level areas), used to assign each 1 km cell and to answer drawn polygons.',
+    what: 'Department and municipality boundaries (1,122 municipality-level areas), used to assign each detection to a municipality and to answer drawn polygons.',
     link: 'https://www.dane.gov.co/files/geoportal-provisional/',
   },
   {
@@ -107,8 +107,9 @@ export function DataPage() {
           <Icon name="sparkle" size={20} />
           <div>
             <p>
-              <b>The harmonization method is the team's.</b> The choices in METHOD.md (filters, 1 km cells, the reference
-              sensor, the seasonal baseline and the alert levels) were decided by the three members of Horum Labs, as the
+              <b>The harmonization method is the team's.</b> The choices in METHOD.md (filters, the reference sensor, the
+              seasonal baseline, the alert levels, and the rule that rescales MODIS to VIIRS units together with the margins
+              of its test) were decided by the three members of Horum Labs, as the
               challenge rules require.
             </p>
             <p>

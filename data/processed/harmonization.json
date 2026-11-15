@@ -1,5 +1,5 @@
 {
-  "ai_note": "The rule and its margins were written by the Horum Labs team; the AI implemented and ran the test. See docs/HARMONIZATION_TEST_PLAN.md and docs/HARMONIZATION_RESULTS.md.",
+  "ai_note": "The rule and its margins were written by the Horum Labs team; the AI implemented and ran the test. See docs/HARMONIZATION.md.",
   "accepted": true,
   "quantity": "detections",
   "overlap_years": [

@@ -17,7 +17,10 @@ implementing the method decided by the team in docs/METHOD.md.
 from __future__ import annotations
 
 import argparse
+import gzip
+import io
 import json
+import shutil
 import time
 from pathlib import Path
 
@@ -48,7 +51,7 @@ MIN_BASELINE_ACTIVE_DAYS = 10
 MIN_CELLS_FOR_ALERT = 3
 MAX_MISSING_IN_WINDOW = 3    # a 7-day window with 4+ no-data days is not computed
 VALIDATION_RANGE = ("2023-01-01", "2024-12-31")
-# Harmonized quantity. Chosen by the team's leave-one-year-out test (docs/HARMONIZATION_RESULTS.md):
+# Harmonized quantity. Chosen by the team's leave-one-year-out test (docs/HARMONIZATION.md):
 # "detections" = accepted FIRMS detections ("hot spots"); "active_cells" = active 1 km cells.
 QUANTITY = "detections"
 # Department statuses of the test that show MODIS rescaled to VIIRS units in the single calendar.
@@ -72,7 +75,8 @@ def load_detections(con: duckdb.DuckDBPyConnection) -> None:
             SELECT '{sensor}' AS sensor, '{kind}' AS kind,
                    CAST(latitude AS DOUBLE) AS lat, CAST(longitude AS DOUBLE) AS lon,
                    CAST(acq_date AS DATE) AS utc_date, CAST(acq_time AS INTEGER) AS acq_time,
-                   confidence AS conf, {type_expr} AS "type"
+                   confidence AS conf, {type_expr} AS "type",
+                   daynight, TRY_CAST(frp AS DOUBLE) AS frp
             FROM read_csv('{f.as_posix()}', all_varchar=true)"""
 
     archive_parts, nrt_parts = [], []
@@ -92,7 +96,7 @@ def load_detections(con: duckdb.DuckDBPyConnection) -> None:
     log(f"API cache chunks read: {api_files}")
     con.execute(f"""
         CREATE TABLE det0 AS
-        SELECT sensor, kind, lat, lon, utc_date, "type",
+        SELECT sensor, kind, lat, lon, utc_date, "type", daynight, frp,
           CAST(utc_date AS TIMESTAMP) + to_hours(acq_time // 100) + to_minutes(acq_time % 100)
             - to_hours({TZ_HOURS}) AS lts,
           CASE WHEN sensor = 'MODIS_C61' THEN
@@ -376,6 +380,52 @@ def validation_table(con: duckdb.DuckDBPyConnection, mp: gpd.GeoDataFrame) -> pd
     return pd.concat(frames, ignore_index=True)
 
 
+# ---------------------------------------------------------------- points
+POINT_COLUMNS = ["date", "time", "latitude", "longitude", "sensor", "confidence", "daynight", "frp", "mpio_code"]
+
+
+def export_points(con: duckdb.DuckDBPyConnection, cells: pd.DataFrame) -> dict:
+    """Write the accepted detections ("hot spots") one by one, for the points CSV of the web app.
+
+    One gzipped CSV per department and year under data/processed/web/points/. These are exactly the
+    detections behind the calendar (same filters, same local date, same municipality assignment),
+    for all four sensors. The sensor column is there because different satellites see the same
+    fire: the points of different sensors must not be added together.
+    """
+    folder = OUT / "web" / "points"
+    if folder.exists():
+        shutil.rmtree(folder)
+    cellmap = cells[["cell_id", "mpio_code"]].drop_duplicates()
+    con.register("cellmap", cellmap)
+    pts = con.execute("""
+        SELECT strftime(d.lts, '%Y-%m-%d') AS date, strftime(d.lts, '%H:%M') AS time,
+               d.lat AS latitude, d.lon AS longitude, d.sensor, d.conf_class AS confidence,
+               d.daynight, d.frp, m.mpio_code, year(d.lts) AS y
+        FROM det d JOIN cellmap m USING (cell_id)
+        WHERE d.conf_class IN ('nominal', 'high')
+          AND ((d.kind = 'archive' AND d."type" = 0)
+               OR (d.kind = 'nrt' AND d.cell_id NOT IN (SELECT cell_id FROM mask)))
+        ORDER BY 1, 2, 5, 3, 4""").df()
+    pts["dpto"] = pts["mpio_code"].str[:2]
+    total_bytes, files = 0, 0
+    for (dpto, y), g in pts.groupby(["dpto", "y"], sort=True):
+        target = folder / dpto / f"{y}.csv.gz"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        text = g[POINT_COLUMNS].to_csv(index=False, lineterminator="\n")
+        buf = io.BytesIO()
+        with gzip.GzipFile(fileobj=buf, mode="wb", mtime=0) as gz:   # mtime=0: identical bytes on every build
+            gz.write(text.encode("utf-8"))
+        target.write_bytes(buf.getvalue())
+        total_bytes += target.stat().st_size
+        files += 1
+    by_sensor = pts.groupby("sensor").size()
+    log(f"points: {len(pts):,} accepted detections in {files} files, {total_bytes / 1e6:.1f} MB gzipped")
+    return {"rows": int(len(pts)), "files": files, "bytes": int(total_bytes), "columns": POINT_COLUMNS,
+            "first_year": int(pts["y"].min()), "last_year": int(pts["y"].max()),
+            "rows_by_sensor": {k: int(v) for k, v in by_sensor.items()},
+            "path": "points/{dpto}/{year}.csv.gz"}
+
+
 # ---------------------------------------------------------------- output
 def write(df: pd.DataFrame, name: str, folder: Path = OUT, csv: bool = False) -> None:
     df.to_parquet(folder / f"{name}.parquet", index=False, compression="zstd")
@@ -405,6 +455,7 @@ def main() -> None:
     info["cells_outside_polygons"] = outside
 
     daily = daily_by_municipality(cells)
+    info["points"] = export_points(con, cells)
     ref, status_df, cover, dates = reference_series(con, daily)
     nodata = (status_df["status"] == "no_data").to_numpy()
 
@@ -424,7 +475,7 @@ def main() -> None:
     mo_d = monthly(dkeys, DX, dates, nodata, "dpto_code")
     val = validation_table(con, mp)
 
-    # --- harmonization of the MODIS era (team rule and test: docs/HARMONIZATION_TEST_PLAN.md)
+    # --- harmonization of the MODIS era (team rule and test: docs/HARMONIZATION.md)
     ht_key = "detections" if QUANTITY == "detections" else "cells"
     res = ht.evaluate(daily)
     hsum = res[ht_key]["summary"]
@@ -455,7 +506,7 @@ def main() -> None:
 
     harmonization = {
         "ai_note": "The rule and its margins were written by the Horum Labs team; the AI implemented and ran the test. "
-                   "See docs/HARMONIZATION_TEST_PLAN.md and docs/HARMONIZATION_RESULTS.md.",
+                   "See docs/HARMONIZATION.md.",
         "accepted": accepted, "quantity": QUANTITY, "overlap_years": [ht.YEARS[0], ht.YEARS[-1]],
         "modis_era": [MODIS_FIRST_DATE, str(era_end.date())],
         "factors": [round(float(factor[m]), 4) for m in range(1, 13)],

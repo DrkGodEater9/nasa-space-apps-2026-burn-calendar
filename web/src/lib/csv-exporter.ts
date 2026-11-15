@@ -2,9 +2,11 @@
 // CSV export of what the user queried: the area, the dates, and each day of the series.
 
 import type { AreaSeries, RefContext } from './analysis.ts';
-import type { Area } from './types.ts';
+import type { Area, PointsInfo } from './types.ts';
+import { booleanPointInPolygon } from '@turf/boolean-point-in-polygon';
+import { dataUrl } from './data.ts';
 import { levelInfo } from './colors.ts';
-import { dayToISO, formatMonth, monthIndexOfDay } from './dates.ts';
+import { dayParts, dayToISO, formatMonth, isoToDay, monthIndexOfDay } from './dates.ts';
 
 const STATUS = ['snpp', 'n20_fill', 'no_data'];
 const SENSOR = ['VIIRS_SNPP', 'VIIRS_N20', ''];
@@ -33,6 +35,65 @@ export function download(filename: string, text: string) {
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+/** Text of one gzipped points file, or null when that department has no file for that year. */
+async function fetchPoints(url: string): Promise<string | null> {
+  const r = await fetch(url);
+  if (r.status === 404) return null;
+  if (!r.ok) throw new Error(`Could not load the points file (HTTP ${r.status})`);
+  const bytes = new Uint8Array(await r.arrayBuffer());
+  let text: string;
+  // Some hosts decompress .gz files themselves: only gunzip when the gzip magic bytes are still there.
+  if (bytes[0] === 0x1f && bytes[1] === 0x8b) {
+    const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'));
+    text = await new Response(stream).text();
+  } else {
+    text = new TextDecoder().decode(bytes);
+  }
+  // A development server answers a missing file with the app's HTML page.
+  return text.startsWith('date,') ? text : null;
+}
+
+/**
+ * The individual hot spots of the search: every accepted detection of the municipalities of the
+ * area between the two dates, for all sensors. These are the same detections the calendar counts.
+ * For a drawn shape the column `inside_drawn_shape` says whether the point is inside it, because
+ * the calendar counts whole municipalities. Returns the number of points written.
+ */
+export async function pointsCsv(area: Area, from: number, to: number, info: PointsInfo): Promise<number> {
+  const a = Math.max(from, isoToDay(`${info.first_year}-01-01`));
+  const [isoA, isoB] = [dayToISO(a), dayToISO(to)];
+  const codes = new Set(area.members.map((m) => m.mpio));
+  const shape = (area.kind === 'polygon' || area.kind === 'bbox') && area.geometry ? area.geometry : null;
+  const jobs: Promise<string | null>[] = [];
+  for (const dpto of area.dptoCodes) {
+    for (let y = dayParts(a).y; y <= dayParts(to).y; y++) {
+      jobs.push(fetchPoints(dataUrl(`web/${info.path.replace('{dpto}', dpto).replace('{year}', String(y))}`)));
+    }
+  }
+  const lines: string[] = [];
+  for (const text of await Promise.all(jobs)) {
+    if (!text) continue;
+    const rows = text.split('\n');
+    for (let i = 1; i < rows.length; i++) {
+      const row = rows[i];
+      if (!row) continue;
+      const date = row.slice(0, 10);
+      if (date < isoA || date > isoB) continue;
+      if (!codes.has(row.slice(row.lastIndexOf(',') + 1))) continue;
+      if (shape) {
+        const f = row.split(',');
+        lines.push(`${row},${booleanPointInPolygon([Number(f[3]), Number(f[2])], shape) ? 'true' : 'false'}`);
+      } else {
+        lines.push(row);
+      }
+    }
+  }
+  lines.sort();
+  const header = [...info.columns, ...(shape ? ['inside_drawn_shape'] : [])].join(',');
+  download(`burn_calendar_${slug(area)}_${isoA}_${isoB}_hot_spot_points.csv`, [header, ...lines].join('\r\n') + '\r\n');
+  return lines.length;
 }
 
 /** One row per day for the whole area. Days of the MODIS era (estimates) come first when the area shows them. */

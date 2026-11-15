@@ -35,8 +35,33 @@
     }
   ],
   "cells_outside_polygons": 3505,
+  "points": {
+    "rows": 3139875,
+    "files": 771,
+    "bytes": 37172153,
+    "columns": [
+      "date",
+      "time",
+      "latitude",
+      "longitude",
+      "sensor",
+      "confidence",
+      "daynight",
+      "frp",
+      "mpio_code"
+    ],
+    "first_year": 2003,
+    "last_year": 2026,
+    "rows_by_sensor": {
+      "MODIS_C61": 617312,
+      "VIIRS_N20": 772828,
+      "VIIRS_N21": 279501,
+      "VIIRS_SNPP": 1470234
+    },
+    "path": "points/{dpto}/{year}.csv.gz"
+  },
   "ai_note": "Built by scripts/build_dataset.py, written with the help of an AI assistant (Claude Code), implementing the method decided by the Horum Labs team in docs/METHOD.md.",
-  "built_utc": "2026-11-15T03:05:01.508205+00:00",
+  "built_utc": "2026-11-15T05:10:40.316015+00:00",
   "parameters": {
     "cell_degrees": 0.01,
     "timezone": "UTC-5",

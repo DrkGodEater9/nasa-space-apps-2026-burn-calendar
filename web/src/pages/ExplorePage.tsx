@@ -14,7 +14,7 @@ import {
 } from '../lib/geo.ts';
 import { dayParts, dayToISO, formatDay, isValidIso, isoToDay, monthIndexOfDay, ymdToDay } from '../lib/dates.ts';
 import { imageryForDay } from '../lib/imagery.ts';
-import { dailyCsv, memberCsv, monthlyCsv } from '../lib/csv-exporter.ts';
+import { dailyCsv, memberCsv, monthlyCsv, pointsCsv } from '../lib/csv-exporter.ts';
 import { fmtInt } from '../lib/format.ts';
 import { MapView } from '../components/MapView.tsx';
 import { DayInspector } from '../components/DayInspector.tsx';
@@ -207,6 +207,22 @@ export function ExplorePage({ boot, params, onParams }: Props) {
     setFocusDay(refEnd);
   };
 
+  const [pointsBusy, setPointsBusy] = useState(false);
+  const downloadPoints = async () => {
+    if (!area || !manifest.points || pointsBusy) return;
+    setCsvMenu(false);
+    setPointsBusy(true);
+    flash('Preparing the hot spot points…');
+    try {
+      const n = await pointsCsv(area, Math.max(0, from), to, manifest.points);
+      flash(n ? `${fmtInt(n)} hot spot points downloaded.` : 'No hot spots in this area and these dates.');
+    } catch (e) {
+      flash(e instanceof Error ? e.message : 'The points could not be downloaded.');
+    } finally {
+      setPointsBusy(false);
+    }
+  };
+
   const share = async () => {
     try {
       await navigator.clipboard.writeText(window.location.href);
@@ -298,6 +314,11 @@ export function ExplorePage({ boot, params, onParams }: Props) {
                       </button>
                       {csvMenu && (
                         <div className="menu" role="menu" onMouseLeave={() => setCsvMenu(false)}>
+                          {manifest.points && (
+                            <button role="menuitem" onClick={downloadPoints} disabled={pointsBusy}>
+                              <b>Hot spot points</b><small>Every detection of this search: date, time, latitude, longitude, sensor, confidence, FRP. All satellites, not to be added together</small>
+                            </button>
+                          )}
                           <button role="menuitem" onClick={() => { dailyCsv(area, series, ctx, hasEra ? viewFrom : Math.max(from, refStart), to); setCsvMenu(false); }}>
                             <b>Daily series</b><small>One row per day: hot spots, 7-day total, level, sensor, gaps{hasEra ? ', estimated days marked' : ''}</small>
                           </button>

@@ -547,8 +547,15 @@ a.chip:hover { text-decoration: none; }
 }
 
 /* Estimated values: MODIS rescaled to VIIRS units. Always hatched, never shown as observations. */
-.lg-est { background-image: repeating-linear-gradient(-45deg, rgba(255, 255, 255, 0.55) 0 1px, transparent 1px 3.6px) !important; }
+.lg-est { background-image: repeating-linear-gradient(-45deg, rgba(11, 15, 23, 0.75) 0 1.1px, rgba(255, 255, 255, 0.6) 1.1px 2px, transparent 2px 4px) !important; }
 .yb-fill.est {
   opacity: 0.78;
-  background-image: repeating-linear-gradient(-45deg, rgba(255, 255, 255, 0.35) 0 1.5px, transparent 1.5px 5px), linear-gradient(90deg, #8f2469, #e9622c);
+  background-image: repeating-linear-gradient(-45deg, rgba(11, 15, 23, 0.6) 0 1.4px, rgba(255, 255, 255, 0.4) 1.4px 2.6px, transparent 2.6px 5.5px), linear-gradient(90deg, #8f2469, #e9622c);
 }
+
+/* Monthly factors and their test error on the method page. */
+.factor-table { display: grid; gap: 4px; font-size: 12.5px; overflow-x: auto; }
+.ft-row { display: grid; grid-template-columns: 90px repeat(12, minmax(46px, 1fr)); gap: 4px; align-items: center; }
+.ft-row > span { padding: 6px 4px; text-align: center; border-radius: 6px; background: rgba(255, 255, 255, 0.04); font-variant-numeric: tabular-nums; }
+.ft-row > span:first-child { text-align: left; background: none; color: var(--muted, #9aa7c2); }
+.ft-head > span { background: none; color: var(--muted, #9aa7c2); font-weight: 600; }

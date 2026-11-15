@@ -34,10 +34,10 @@ API_URL = "https://firms.modaps.eosdis.nasa.gov/api/area/csv/{key}/{source}/{bbo
 MAX_DAYS = 5  # the API accepts 1-5 days per request
 ENV_VAR = "FIRMS_MAP_KEY"
 
-# Colombia, approximate box: west, south, east, north (from PLAN.md)
+# Colombia, approximate box: west, south, east, north
 COLOMBIA_BBOX = (-79.5, -4.5, -66.5, 12.8)
 
-# First day each archive source has data (from PLAN.md)
+# First day each archive source has data (FIRMS archive coverage)
 SOURCE_START = {
     "MODIS_SP": date(2000, 11, 1),
     "VIIRS_SNPP_SP": date(2012, 1, 20),

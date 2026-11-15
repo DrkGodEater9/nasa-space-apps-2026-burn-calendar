@@ -2,7 +2,7 @@
 
 Background: docs/VALIDATION.md shows that Meta and Caqueta each differ from IDEAM by about
 +-1,000 detections per semester in opposite directions, while their sum matches. The
-hypothesis (docs/IDEAM_META_CAQUETA_BOUNDARY.md) is that IDEAM uses a department layer that
+hypothesis (docs/VALIDATION.md) is that IDEAM uses a department layer that
 includes the provisional IGAC limit of September 2020, while the MGN 2018 layer predates it.
 
 Usage (from the repository root):

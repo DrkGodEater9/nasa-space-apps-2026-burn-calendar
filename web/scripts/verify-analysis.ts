@@ -95,5 +95,42 @@ for (const code of ['52', '50', '99', '11']) {
   }
   console.log(`dept ${code}: ${munis.size} municipalities, ${rowsChecked} municipal month rows, ${deptRows} department month rows, ${eraRows} MODIS-era rows`);
 }
+// Points CSV: for each municipality and day, the points of that day's reference sensor are exactly
+// the hot spots the calendar shows.
+if (manifest.points) {
+  const { gunzipSync } = await import('node:zlib');
+  const { existsSync } = await import('node:fs');
+  const status = load<StatusFile>('status.json');
+  const refSensor = ['VIIRS_SNPP', 'VIIRS_N20', ''];
+  let pointRows = 0;
+  for (const [code, year] of [['52', 2024], ['50', 2019], ['99', 2022]] as const) {
+    const file = path.join(root, manifest.points.path.replace('{dpto}', code).replace('{year}', String(year)));
+    if (!existsSync(file)) { check(`points file missing ${code}/${year}`, false); continue; }
+    const rows = gunzipSync(readFileSync(file)).toString('utf8').split('\n');
+    check(`points header ${code}/${year}`, rows[0] === manifest.points.columns.join(','));
+    const counted = new Map<string, number>();
+    for (let i = 1; i < rows.length; i++) {
+      if (!rows[i]) continue;
+      const f = rows[i].split(',');
+      const dayIdx = Math.round((Date.parse(f[0]) - Date.parse(status.start)) / 86400000);
+      pointRows++;
+      if (f[4] !== refSensor[status.status[dayIdx]]) continue;
+      const key = `${f[8]}|${f[0]}`;
+      counted.set(key, (counted.get(key) ?? 0) + 1);
+    }
+    const dep = load<DeptFile>(`departments/${code}.json`);
+    const base = Date.parse(manifest.day_base);
+    let expected = 0;
+    for (let r = 0; r < dep.daily.d.length; r++) {
+      const iso = new Date(base + dep.daily.d[r] * 86400000).toISOString().slice(0, 10);
+      if (!iso.startsWith(String(year))) continue;
+      expected++;
+      const key = `${dep.municipalities[dep.daily.m[r]].code}|${iso}`;
+      check(`points ${key}: ${counted.get(key)} vs calendar ${dep.daily.c[r]}`, counted.get(key) === dep.daily.c[r]);
+    }
+    check(`points ${code}/${year}: ${counted.size} municipality-days vs calendar ${expected}`, counted.size === expected);
+  }
+  console.log(`points: ${pointRows} points cross-checked against the calendar values`);
+}
 console.log(failures ? `FAILED: ${failures} mismatches` : 'OK: web aggregation matches the data pipeline');
 process.exit(failures ? 1 : 0);
