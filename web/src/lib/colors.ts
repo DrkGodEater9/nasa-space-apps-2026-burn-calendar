@@ -33,7 +33,7 @@ export const NO_ACTIVITY: LevelInfo = {
   key: 'none',
   label: 'No activity',
   color: CELL_ZERO,
-  range: '0 cells in 7 days',
+  range: '0 hot spots in 7 days',
   text: '#c9d3e3',
 };
 

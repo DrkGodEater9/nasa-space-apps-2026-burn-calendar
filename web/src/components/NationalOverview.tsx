@@ -2,13 +2,14 @@
 // Landing view before an area is chosen: how Colombia looks on the selected day.
 
 import { useMemo, useState } from 'react';
-import type { DeptStatus, MonthStat } from '../lib/analysis.ts';
+import type { DeptStatus, MonthStat, YearTotal } from '../lib/analysis.ts';
+import type { Harmonization } from '../lib/types.ts';
 import { levelInfo, levelRank } from '../lib/colors.ts';
 import { formatDay } from '../lib/dates.ts';
 import { fmtInt, fmtRatio, titleCase } from '../lib/format.ts';
 import type { GeoIndex } from '../lib/geo.ts';
 import { AreaPicker } from './AreaPicker.tsx';
-import { MonthlyChart } from './Charts.tsx';
+import { MonthlyChart, YearBars } from './Charts.tsx';
 import { Icon } from './Icon.tsx';
 import { Card } from './Panels.tsx';
 
@@ -17,6 +18,9 @@ interface Props {
   day: number;
   depts: DeptStatus[];
   monthly: MonthStat[];
+  /** National hot spots per year of the single calendar (MODIS era estimated, then VIIRS). */
+  years: YearTotal[];
+  harm: Harmonization | null;
   onDepartment: (code: string) => void;
   onMunicipality: (code: string) => void;
   onPoint: (lon: number, lat: number) => string | null;
@@ -56,7 +60,7 @@ export function NationalOverview(p: Props) {
         <AreaPicker geo={p.geo} onDepartment={p.onDepartment} onMunicipality={p.onMunicipality} onPoint={p.onPoint} onBox={p.onBox} />
         <div className="steps">
           <div><span>1</span><p>Pick an area: search, click the map, <button className="link-btn" onClick={p.onDrawTool}>draw a polygon</button> or type coordinates.</p></div>
-          <div><span>2</span><p>Choose dates. The record starts in 2012 (VIIRS) and 2003 (MODIS).</p></div>
+          <div><span>2</span><p>Choose dates. VIIRS starts in 2012; departments that passed the harmonization test go back to 2003 with MODIS rescaled to VIIRS units.</p></div>
           <div><span>3</span><p>Read the calendar, compare with history and download the CSV.</p></div>
         </div>
         <div className="suggest">
@@ -75,7 +79,7 @@ export function NationalOverview(p: Props) {
         sub="Departments ranked by their 7-day activity level against the same season since 2012. Click one to explore it."
       >
         <div className="nat-total">
-          <div><b>{fmtInt(total)}</b><span>active 1 km cells in the last 7 days</span></div>
+          <div><b>{fmtInt(total)}</b><span>hot spots in the last 7 days</span></div>
           {lastComplete && lastComplete.ratio !== null && (
             <div><b>{fmtRatio(lastComplete.ratio)}</b><span>national activity in {formatMonthName(lastComplete)} vs. its median</span></div>
           )}
@@ -98,9 +102,19 @@ export function NationalOverview(p: Props) {
         <button className="link-btn" onClick={() => setShowAll(!showAll)}>{showAll ? 'Show top 10' : 'Show all 33 departments'}</button>
       </Card>
 
-      <Card title="National activity, last 36 months" icon="chart" sub="Active-cell days per month, all 33 departments (VIIRS reference). The dashed line is the median of the same month in the other years; orange months are above the 90th percentile of their history.">
+      <Card title="National activity, last 36 months" icon="chart" sub="Hot spots per month, all 33 departments (VIIRS reference). The dashed line is the median of the same month in the other years; orange months are above the 90th percentile of their history.">
         <MonthlyChart rows={last36} />
       </Card>
+
+      {p.harm && p.years.some((t) => t.est) && (
+        <Card
+          title="Colombia, hot spots per year since 2003"
+          icon="clock"
+          sub={<>One harmonized series. 2003–2011 are MODIS rescaled to VIIRS units with a factor per month (lighter bars, estimates); from 2012 the values are VIIRS observations. In the test the national monthly total was predicted with a median error of {p.harm.national_error_all_months_pct.toFixed(1)}%.</>}
+        >
+          <YearBars totals={p.years} note={p.harm.notice} />
+        </Card>
+      )}
     </div>
   );
 }

@@ -33,7 +33,9 @@ export function DayInspector(p: Props) {
   let body;
   if (p.area && p.series) {
     const s = p.series;
-    const lv = s.level[i] ?? -1;
+    // A day before the VIIRS reference, shown as MODIS rescaled to VIIRS units where the area has it.
+    const era = i < 0 && day >= 0 ? s.era : null;
+    const lv = era ? era.level[day] : s.level[i] ?? -1;
     const li = levelInfo(lv);
     const contributors = p.area.members
       .map((m, k) => ({ name: m.name, c: s.memberCells[k][i] ?? 0 }))
@@ -44,19 +46,20 @@ export function DayInspector(p: Props) {
       <>
         <div className="di-stats">
           <div>
-            <div className="di-label">Active cells</div>
-            <div className="di-val">{st === STATUS_NODATA ? '—' : fmtInt(s.cells[i] ?? 0)}</div>
+            <div className="di-label">{era ? 'Hot spots (est.)' : 'Hot spots'}</div>
+            <div className="di-val">{era ? (ctx.eraNoData[day] ? '—' : `≈ ${fmtInt(Math.round(era.est[day]))}`) : st === STATUS_NODATA ? '—' : fmtInt(s.cells[i] ?? 0)}</div>
           </div>
           <div>
             <div className="di-label">7-day total</div>
-            <div className="di-val">{fmtInt(s.cells7[i] ?? 0)}</div>
+            <div className="di-val">{era ? `≈ ${fmtInt(Math.round(era.est7[day]))}` : fmtInt(s.cells7[i] ?? 0)}</div>
           </div>
           <div>
             <div className="di-label">Level</div>
             <div className="di-val"><span className="level-pill" style={{ background: li.color, color: li.text }}>{li.label}</span></div>
           </div>
         </div>
-        {s.fallback[i] ? <div className="di-note">Municipal history is too short this season; department level shown.</div> : null}
+        {era && <div className="di-note">MODIS rescaled to VIIRS units (estimated). The level is the internal anomaly of the MODIS era (2003–2011), not a current alert.</div>}
+        {!era && s.fallback[i] ? <div className="di-note">Municipal history is too short this season; department level shown.</div> : null}
         {contributors.length > 1 && (
           <div className="di-contrib">
             {contributors.map((c) => <span key={c.name}>{c.name} <b>{fmtInt(c.c)}</b></span>)}
@@ -77,7 +80,7 @@ export function DayInspector(p: Props) {
         <div className="di-stats">
           <div>
             <div className="di-label">Colombia, 7 days</div>
-            <div className="di-val">{fmtInt(total)}<small> cells</small></div>
+            <div className="di-val">{fmtInt(total)}<small> hot spots</small></div>
           </div>
           {[3, 2, 1].map((l) => (
             <div key={l}>

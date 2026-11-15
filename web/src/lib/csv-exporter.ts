@@ -35,29 +35,43 @@ export function download(filename: string, text: string) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-/** One row per day for the whole area. */
+/** One row per day for the whole area. Days of the MODIS era (estimates) come first when the area shows them. */
 export function dailyCsv(area: Area, s: AreaSeries, ctx: RefContext, from: number, to: number) {
   const a = Math.max(from, s.refStart);
   const b = Math.min(to, s.refEnd);
   const codes = area.members.map((m) => m.mpio).join(' ');
   const rows: (string | number | null)[][] = [];
+  const first = s.era ? Math.max(0, Math.min(from, a)) : a;
+  if (s.era) {
+    for (let day = first; day <= Math.min(to, s.refStart - 1); day++) {
+      const lv = s.era.level[day];
+      const gap = ctx.eraNoData[day] === 1;
+      rows.push([
+        dayToISO(day), area.label, codes,
+        gap ? null : Math.round(s.era.est[day] * 10) / 10, Math.round(s.era.est7[day] * 10) / 10, null,
+        lv < 0 ? 'none' : levelInfo(lv).key, lv < 0 ? '' : 'modis_era_internal',
+        gap ? 'no_data' : 'modis_rescaled_estimated', 'MODIS_C61', 'false',
+        null, s.modis[day] ?? 0,
+      ]);
+    }
+  }
   for (let day = a; day <= b; day++) {
     const i = day - s.refStart;
     const st = ctx.status[i];
     const lv = s.level[i];
     rows.push([
       dayToISO(day), area.label, codes,
-      st === 2 ? null : s.cells[i], s.cells7[i],
+      st === 2 ? null : s.cells[i], s.cells7[i], st === 2 ? null : s.activeCells[i],
       lv < 0 ? 'none' : levelInfo(lv).key, lv < 0 ? '' : s.fallback[i] ? 'department_fallback' : area.kind === 'department' ? 'department' : 'municipality',
       STATUS[st] ?? '', SENSOR[st] ?? '', st === 1 ? 'true' : 'false',
       s.n21[i], s.modis[day] ?? 0,
     ]);
   }
   const header = [
-    'date', 'area', 'mpio_codes', 'active_cells', 'cells_7d', 'level', 'level_source',
-    'status', 'ref_sensor', 'filled', 'noaa21_cells_info', 'modis_cells_info',
+    'date', 'area', 'mpio_codes', 'hot_spots', 'hot_spots_7d', 'active_cells_1km', 'level', 'level_source',
+    'status', 'sensor', 'filled', 'noaa21_hot_spots_info', 'modis_hot_spots_raw',
   ];
-  download(`burn_calendar_${slug(area)}_${dayToISO(a)}_${dayToISO(b)}_daily.csv`, toCsv(header, rows));
+  download(`burn_calendar_${slug(area)}_${dayToISO(first)}_${dayToISO(b)}_daily.csv`, toCsv(header, rows));
 }
 
 /** One row per municipality and day with activity. */
@@ -72,7 +86,7 @@ export function memberCsv(area: Area, s: AreaSeries, from: number, to: number) {
       if (c > 0) rows.push([dayToISO(day), m.mpio, m.name, m.dpto, m.dptoName, c, Math.round(m.coverage * 1000) / 10]);
     });
   }
-  const header = ['date', 'mpio_code', 'mpio_name', 'dpto_code', 'dpto_name', 'active_cells', 'pct_area_in_selection'];
+  const header = ['date', 'mpio_code', 'mpio_name', 'dpto_code', 'dpto_name', 'hot_spots', 'pct_area_in_selection'];
   download(`burn_calendar_${slug(area)}_${dayToISO(a)}_${dayToISO(b)}_by_municipality.csv`, toCsv(header, rows));
 }
 
@@ -85,8 +99,8 @@ export function monthlyCsv(area: Area, s: AreaSeries, from: number, to: number) 
       r.d1, r.d2, r.histYears,
       r.med, r.ratio === null ? null : Math.round(r.ratio * 100) / 100, r.pct === null ? null : Math.round(r.pct * 10) / 10,
     ]);
-  const header = ['month', 'label', 'cell_days', 'active_days', 'no_data_days', 'month_complete',
+  const header = ['month', 'label', 'hot_spots', 'active_days', 'no_data_days', 'month_complete',
     'compare_first_day', 'compare_last_day', 'history_years',
-    'hist_median_cell_days', 'ratio_vs_median', 'percentile_vs_history'];
+    'hist_median_hot_spots', 'ratio_vs_median', 'percentile_vs_history'];
   download(`burn_calendar_${slug(area)}_monthly.csv`, toCsv(header, rows));
 }

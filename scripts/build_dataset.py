@@ -7,7 +7,7 @@ Implements docs/METHOD.md. Run from the repository root:
 Inputs (not in Git):  data/raw/archive/DL_FIRE_*/fire_{archive,nrt}_*.csv
                       data/raw/firms_cache/*_NRT/*.csv  (optional, newest days from the FIRMS API)
 Inputs (in Git):      data/processed/dane_mgn2018_municipios.geojson
-Outputs:              data/processed/*.parquet, *.csv, build_info.json
+Outputs:              data/processed/*.parquet, *.csv, build_info.json, harmonization.json
                       data/sample/*  (small subset for the web team)
 
 AI use: this script was written with the help of an AI assistant (Claude Code),
@@ -25,6 +25,8 @@ import duckdb
 import geopandas as gpd
 import numpy as np
 import pandas as pd
+
+import harmonization_test as ht
 
 ROOT = Path(__file__).resolve().parent.parent
 RAW = ROOT / "data" / "raw" / "archive"
@@ -46,6 +48,11 @@ MIN_BASELINE_ACTIVE_DAYS = 10
 MIN_CELLS_FOR_ALERT = 3
 MAX_MISSING_IN_WINDOW = 3    # a 7-day window with 4+ no-data days is not computed
 VALIDATION_RANGE = ("2023-01-01", "2024-12-31")
+# Harmonized quantity. Chosen by the team's leave-one-year-out test (docs/HARMONIZATION_RESULTS.md):
+# "detections" = accepted FIRMS detections ("hot spots"); "active_cells" = active 1 km cells.
+QUANTITY = "detections"
+# Department statuses of the test that show MODIS rescaled to VIIRS units in the single calendar.
+SHOW_RESCALED = {"ok", "low_confidence"}
 T0 = time.time()
 
 
@@ -203,12 +210,12 @@ def reference_series(con: duckdb.DuckDBPyConnection, daily: pd.DataFrame):
     return ref, status_df, cover, dates
 
 
-def build_matrix(df: pd.DataFrame, key: str, dates: pd.DatetimeIndex, nodata: np.ndarray):
+def build_matrix(df: pd.DataFrame, key: str, dates: pd.DatetimeIndex, nodata: np.ndarray, value_col: str = QUANTITY):
     keys = sorted(df[key].unique())
     ki = {k: i for i, k in enumerate(keys)}
     di = pd.Series(np.arange(len(dates)), index=dates)
     X = np.zeros((len(keys), len(dates)), np.float32)
-    X[df[key].map(ki).to_numpy(), di.reindex(df["date"]).to_numpy()] = df["active_cells"].to_numpy()
+    X[df[key].map(ki).to_numpy(), di.reindex(df["date"]).to_numpy()] = df[value_col].to_numpy()
     X[:, nodata] = np.nan
     return keys, X
 
@@ -240,7 +247,7 @@ def percentiles(sub: np.ndarray, qs):
     return out, n
 
 
-def anomalies(keys, X: np.ndarray, S: np.ndarray, dates: pd.DatetimeIndex, id_col: str) -> pd.DataFrame:
+def anomalies(keys, X: np.ndarray, S: np.ndarray, dates: pd.DatetimeIndex, id_col: str, as_int: bool = True) -> pd.DataFrame:
     T = len(dates)
     years = range(dates[0].year, dates[-1].year + 1)
     date_index = {d: i for i, d in enumerate(dates)}
@@ -273,12 +280,13 @@ def anomalies(keys, X: np.ndarray, S: np.ndarray, dates: pd.DatetimeIndex, id_co
         level = np.where((v < MIN_CELLS_FOR_ALERT) & np.isin(level, ["unusual", "extreme"]), "elevated", level)
         level = np.where((act_days < MIN_BASELINE_ACTIVE_DAYS) | (n == 0), "insufficient", level)
         pieces.append(pd.DataFrame({
-            id_col: keys[sel], "date": t, "cells_7d": v.astype(np.int32),
+            id_col: keys[sel], "date": t,
+            "hotspots_7d": v.astype(np.int32) if as_int else np.round(v, 1).astype(np.float32),
             "p75": np.round(p75, 2).astype(np.float32), "p90": np.round(p90, 2).astype(np.float32),
             "p97_5": np.round(p975, 2).astype(np.float32),
             "baseline_samples": n.astype(np.int32), "baseline_active_days": act_days.astype(np.int32),
             "level": level}))
-    return pd.concat(pieces, ignore_index=True)
+    return pd.concat(pieces, ignore_index=True) if pieces else pd.DataFrame()
 
 
 def monthly(keys, X: np.ndarray, dates: pd.DatetimeIndex, nodata: np.ndarray, id_col: str) -> pd.DataFrame:
@@ -329,8 +337,8 @@ def monthly(keys, X: np.ndarray, dates: pd.DatetimeIndex, nodata: np.ndarray, id
         s = df.stack(future_stack=True) if hasattr(df, "stack") else df
         s.index.names = ["period", id_col]
         return s.rename(name)
-    out = pd.concat([long(cell_days, "cell_days"), long(active_days, "active_days"),
-                     long(median, "hist_median_cell_days"), long(ratio, "ratio_vs_median"),
+    out = pd.concat([long(cell_days, "hotspots"), long(active_days, "active_days"),
+                     long(median, "hist_median_hotspots"), long(ratio, "ratio_vs_median"),
                      long(pct, "percentile_vs_history")], axis=1).reset_index()
     out["month"] = out["period"].dt.to_timestamp().dt.date
     out["no_data_days"] = out["period"].map(nodata_days).astype(int)
@@ -338,13 +346,13 @@ def monthly(keys, X: np.ndarray, dates: pd.DatetimeIndex, nodata: np.ndarray, id
     out["history_years"] = out["period"].map(hist_n).astype(int)
     out["compare_first_day"] = out["period"].map(first_day).astype(int)
     out["compare_last_day"] = out["period"].map(last_day).astype(int)
-    for c in ("cell_days", "active_days"):
+    for c in ("hotspots", "active_days"):
         out[c] = out[c].astype(int)
-    for c in ("hist_median_cell_days", "ratio_vs_median", "percentile_vs_history"):
+    for c in ("hist_median_hotspots", "ratio_vs_median", "percentile_vs_history"):
         out[c] = out[c].round(2).astype("float32")
-    return out[[id_col, "month", "cell_days", "active_days", "no_data_days", "month_complete",
+    return out[[id_col, "month", "hotspots", "active_days", "no_data_days", "month_complete",
                 "compare_first_day", "compare_last_day",
-                "history_years", "hist_median_cell_days", "ratio_vs_median", "percentile_vs_history"]]
+                "history_years", "hist_median_hotspots", "ratio_vs_median", "percentile_vs_history"]]
 
 
 # ---------------------------------------------------------------- validation
@@ -402,8 +410,8 @@ def main() -> None:
 
     # --- reference series per municipality and per department
     ref_dept = (ref.assign(dpto_code=ref["mpio_code"].str[:2])
-                .groupby(["dpto_code", "date", "sensor"], as_index=False)["active_cells"].sum())
-    ref_m = ref[["mpio_code", "date", "active_cells", "sensor", "filled"]]
+                .groupby(["dpto_code", "date", "sensor"], as_index=False)[["active_cells", "detections"]].sum())
+    ref_m = ref[["mpio_code", "date", "detections", "active_cells", "sensor", "filled"]]
     mkeys, MX = build_matrix(ref, "mpio_code", dates, nodata)
     dkeys, DX = build_matrix(ref_dept, "dpto_code", dates, nodata)
     log(f"matrices: {MX.shape[0]} municipalities, {DX.shape[0]} departments, {MX.shape[1]} days")
@@ -415,6 +423,51 @@ def main() -> None:
     mo_m = monthly(mkeys, MX, dates, nodata, "mpio_code")
     mo_d = monthly(dkeys, DX, dates, nodata, "dpto_code")
     val = validation_table(con, mp)
+
+    # --- harmonization of the MODIS era (team rule and test: docs/HARMONIZATION_TEST_PLAN.md)
+    ht_key = "detections" if QUANTITY == "detections" else "cells"
+    res = ht.evaluate(daily)
+    hsum = res[ht_key]["summary"]
+    fac = res[ht_key]["factors"].set_index("month")
+    factor = fac["factor"]
+    dept_status = res[ht_key]["departments"].set_index("dpto_code")["status"]
+    accepted = bool(hsum["national_pass"])           # if the national test fails, the sensors stay separate
+    era_end = dates[0] - pd.Timedelta(days=1)        # the day before the VIIRS reference series starts
+    era_dates = pd.date_range(MODIS_FIRST_DATE, era_end, freq="D")
+    modis_has = (cover[cover["sensor"] == "MODIS_C61"].set_index("date")["has_data"]
+                 .reindex(era_dates, fill_value=False).to_numpy())
+    modis_nodata = ~modis_has
+    an_modis = pd.DataFrame()
+    if accepted:
+        modis = daily[(daily["sensor"] == "MODIS_C61") & (daily["date"] <= era_end)].copy()
+        modis["estimated"] = modis[QUANTITY] * modis["date"].dt.month.map(factor)
+        modis["dpto_code"] = modis["mpio_code"].str[:2]
+        shown = (modis[modis["dpto_code"].map(dept_status).isin(SHOW_RESCALED)]
+                 .groupby(["dpto_code", "date"], as_index=False)["estimated"].sum())
+        ekeys, EX = build_matrix(shown, "dpto_code", era_dates, modis_nodata, "estimated")
+        # "Internal anomaly of the MODIS era": the same windows and percentiles, against 2003-2011 only.
+        an_modis = anomalies(ekeys, EX, rolling_sum(EX, modis_nodata), era_dates, "dpto_code", as_int=False)
+    band = res[ht_key]["band"]
+
+    def month_errors(code: str) -> list:
+        b = band[band["dpto_code"] == code].set_index("month")["median_abs_error_pct"]
+        return [float(b[m]) if m in b.index else None for m in range(1, 13)]
+
+    harmonization = {
+        "ai_note": "The rule and its margins were written by the Horum Labs team; the AI implemented and ran the test. "
+                   "See docs/HARMONIZATION_TEST_PLAN.md and docs/HARMONIZATION_RESULTS.md.",
+        "accepted": accepted, "quantity": QUANTITY, "overlap_years": [ht.YEARS[0], ht.YEARS[-1]],
+        "modis_era": [MODIS_FIRST_DATE, str(era_end.date())],
+        "factors": [round(float(factor[m]), 4) for m in range(1, 13)],
+        "national_error_pct": [float(fac.loc[m, "test_median_abs_error_pct"]) for m in range(1, 13)],
+        "national_error_all_months_pct": hsum["h1_median_over_156_year_months_pct"],
+        "modis_no_data_days": [str(d.date()) for d in era_dates[modis_nodata]],
+        "departments": {code: {"status": st, "error_pct": month_errors(code)} for code, st in dept_status.items()},
+    }
+    (OUT / "harmonization.json").write_text(json.dumps(harmonization, indent=2), encoding="utf-8")
+    log(f"harmonization: accepted={accepted}, quantity={QUANTITY}, departments shown rescaled: "
+        f"{int(dept_status.isin(SHOW_RESCALED).sum())}, MODIS-era anomaly rows: {len(an_modis):,}, "
+        f"MODIS no-data days in the era: {int(modis_nodata.sum())}")
 
     # --- write full tables
     tables = {
@@ -428,6 +481,8 @@ def main() -> None:
         "monthly_municipio": mo_m,
         "monthly_departamento": mo_d,
     }
+    if len(an_modis):
+        tables["anomaly_modis_era_departamento"] = an_modis.assign(date=as_date(an_modis["date"]))
     for name, df in tables.items():
         write(df, name)
     val.to_csv(OUT / "validation_snpp_dept_month_2023_2024.csv", index=False)
@@ -459,7 +514,7 @@ def main() -> None:
             "cell_degrees": CELL_DEG, "timezone": "UTC-5", "modis_first_date": MODIS_FIRST_DATE,
             "mask_min_months": MASK_MIN_MONTHS, "window_days": WINDOW_DAYS,
             "season_half_width_days": SEASON_HALF_WIDTH, "min_baseline_active_days": MIN_BASELINE_ACTIVE_DAYS,
-            "min_cells_for_alert": MIN_CELLS_FOR_ALERT, "max_missing_days_in_window": MAX_MISSING_IN_WINDOW,
+            "quantity": QUANTITY, "min_count_for_alert": MIN_CELLS_FOR_ALERT, "max_missing_days_in_window": MAX_MISSING_IN_WINDOW,
             "boundaries": "DANE MGN 2018 (data/processed/dane_mgn2018_municipios.geojson)"},
         "reference_range": [str(dates[0].date()), str(dates[-1].date())],
         "reference_days": {k: int(v) for k, v in status_df["status"].value_counts().items()},

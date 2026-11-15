@@ -39,7 +39,7 @@ export function MonthlyChart({ rows, onPick }: { rows: MonthStat[]; onPick?: (mo
 
   return (
     <div className="chart-wrap">
-      <svg viewBox={`0 0 ${W} ${H}`} width="100%" role="img" aria-label="Monthly cell-days compared with the historical median" onMouseLeave={() => setHover(null)}>
+      <svg viewBox={`0 0 ${W} ${H}`} width="100%" role="img" aria-label="Monthly hot spots compared with the historical median" onMouseLeave={() => setHover(null)}>
         {ticks.map((t) => (
           <g key={t}>
             <line x1={pad.l} x2={W - pad.r} y1={y(t)} y2={y(t)} className="grid" />
@@ -75,13 +75,13 @@ export function MonthlyChart({ rows, onPick }: { rows: MonthStat[]; onPick?: (mo
           ) : null))}
       </svg>
       <div className="chart-foot">
-        <span className="lg-item"><i className="sw-bar" />Cell-days</span>
+        <span className="lg-item"><i className="sw-bar" />Hot spots</span>
         <span className="lg-item"><i className="sw-bar hot" />Above P{HOT_PCT} of the same month</span>
         <span className="lg-item"><i className="sw-line" />Median of the same month, other years</span>
         <span className="chart-readout">
           {h ? (
             <>
-              <strong>{formatMonth(h.mo)}</strong> · {fmtInt(h.cd)} cell-days
+              <strong>{formatMonth(h.mo)}</strong> · {fmtInt(h.cd)} hot spots
               {h.med !== null && <> · median {fmtNum(h.med)}</>}
               {h.ratio !== null && <> · <b>{fmtRatio(h.ratio)}</b></>}
               {h.pct !== null && <> · P{Math.round(h.pct)}</>}
@@ -107,12 +107,12 @@ export function MonthHeadline({ row, partial }: { row: MonthStat | null; partial
         <span>{ratio === null ? '' : 'of normal'}</span>
       </div>
       <div className="headline-text">
-        <strong>{MONTHS_LONG[row.m]} {row.y}</strong> recorded <strong>{fmtInt(row.cd)}</strong> cell-days
+        <strong>{MONTHS_LONG[row.m]} {row.y}</strong> recorded <strong>{fmtInt(row.cd)}</strong> hot spots
         {row.med !== null && <> against a median of <strong>{fmtNum(row.med)}</strong> in the {row.histYears} other complete {MONTHS_LONG[row.m]}s since 2012</>}.
         {row.pct !== null && <> It is higher than or equal to <strong>{Math.round(row.pct)}%</strong> of them.</>}
         {partial && (
           <div className="headline-partial">
-            {MONTHS_LONG[partial.m]} {partial.y} so far (days {partial.d1}–{partial.d2}, partial): {fmtInt(partial.cd)} cell-days · median of the same days in the {partial.histYears} other years {partial.med === null ? '—' : fmtNum(partial.med)}
+            {MONTHS_LONG[partial.m]} {partial.y} so far (days {partial.d1}–{partial.d2}, partial): {fmtInt(partial.cd)} hot spots · median of the same days in the {partial.histYears} other years {partial.med === null ? '—' : fmtNum(partial.med)}
             {partial.ratio !== null && <> · <strong>{fmtRatio(partial.ratio)}</strong> of normal</>}
             {partial.pct !== null && <> · higher than or equal to {Math.round(partial.pct)}% of them</>}.
           </div>
@@ -153,7 +153,7 @@ export function SeasonalityMatrix({ rows }: { rows: MonthStat[] }) {
 
   return (
     <div className="season">
-      <svg viewBox={`0 0 ${W} ${H + 44}`} width="100%" role="img" aria-label="Cell-days by year and month" onMouseLeave={() => setHover(null)}>
+      <svg viewBox={`0 0 ${W} ${H + 44}`} width="100%" role="img" aria-label="Hot spots by year and month" onMouseLeave={() => setHover(null)}>
         {MONTHS_SHORT.map((m, i) => (
           <text key={m} x={L + i * CW + CW / 2} y={11} textAnchor="middle" className="axis">{m}</text>
         ))}
@@ -195,12 +195,12 @@ export function SeasonalityMatrix({ rows }: { rows: MonthStat[] }) {
         <span className="chart-readout">
           {hover ? (
             <>
-              <strong>{formatMonth(hover.mo, true)}</strong> · {fmtInt(hover.cd)} cell-days · {hover.ad} active days
+              <strong>{formatMonth(hover.mo, true)}</strong> · {fmtInt(hover.cd)} hot spots · {hover.ad} active days
               {hover.ratio !== null && <> · {fmtRatio(hover.ratio)} the median</>}
               {!hover.ok && <> · partial month</>}
             </>
           ) : top && top.cd > 0 ? (
-            <>Peak month on record: <strong>{formatMonth(top.mo, true)}</strong> ({fmtInt(top.cd)} cell-days)</>
+            <>Peak month on record: <strong>{formatMonth(top.mo, true)}</strong> ({fmtInt(top.cd)} hot spots)</>
           ) : (
             'No activity recorded'
           )}
@@ -213,17 +213,19 @@ export function SeasonalityMatrix({ rows }: { rows: MonthStat[] }) {
 export function YearBars({ totals, accent = false, note }: { totals: YearTotal[]; accent?: boolean; note?: string }) {
   const sorted = [...totals].sort((a, b) => b.y - a.y);
   const max = Math.max(1, ...totals.map((t) => t.cd));
-  const best = [...totals].filter((t) => t.complete).sort((a, b) => b.cd - a.cd)[0];
+  // The busiest year is taken among observed years only: an estimated year never gets that mark.
+  const best = [...totals].filter((t) => t.complete && !t.est).sort((a, b) => b.cd - a.cd)[0];
   return (
     <div className="year-bars">
       {sorted.map((t) => (
         <div key={t.y} className={`yb-row ${best && t.y === best.y ? 'best' : ''}`}>
           <span className="yb-year">{t.y}</span>
           <span className="yb-track">
-            <span className={`yb-fill ${accent ? 'modis' : ''}`} style={{ width: `${(100 * t.cd) / max}%` }} />
+            <span className={`yb-fill ${accent ? 'modis' : ''} ${t.est ? 'est' : ''}`} style={{ width: `${(100 * t.cd) / max}%` }} />
           </span>
           <span className="yb-val">
-            {fmtInt(t.cd)}
+            {t.est ? '≈ ' : ''}{fmtInt(t.cd)}
+            {t.est && <em> est.</em>}
             {!t.complete && <em> partial</em>}
           </span>
         </div>
@@ -259,7 +261,7 @@ export function Sparkbars({ rows }: { rows: MonthStat[] }) {
   const [hover, setHover] = useState<MonthStat | null>(null);
   return (
     <div>
-      <svg viewBox={`0 0 ${W} ${H}`} width="100%" role="img" aria-label="National monthly cell-days, last months" onMouseLeave={() => setHover(null)}>
+      <svg viewBox={`0 0 ${W} ${H}`} width="100%" role="img" aria-label="National monthly hot spots, last months" onMouseLeave={() => setHover(null)}>
         {rows.map((r, i) => {
           const h = (r.cd / max) * (H - 6);
           const mh = r.med === null ? null : H - (r.med / max) * (H - 6);
@@ -276,12 +278,12 @@ export function Sparkbars({ rows }: { rows: MonthStat[] }) {
       <div className="spark-readout">
         {hover ? (
           <>
-            <strong>{formatMonth(hover.mo)}</strong> · {fmtInt(hover.cd)} cell-days
+            <strong>{formatMonth(hover.mo)}</strong> · {fmtInt(hover.cd)} hot spots
             {hover.ratio !== null && <> · {fmtRatio(hover.ratio)} the median</>}
             {!hover.ok && ' · partial'}
           </>
         ) : (
-          <>Bars: national cell-days per month · ticks: median of the same month</>
+          <>Bars: national hot spots per month · ticks: median of the same month</>
         )}
       </div>
     </div>

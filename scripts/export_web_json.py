@@ -36,7 +36,13 @@ LEVELS = ["normal", "elevated", "unusual", "extreme", "insufficient"]
 STATUS = ["snpp", "n20_fill", "no_data"]
 SENSORS_EXTRA = ["MODIS_C61", "VIIRS_N21"]
 NOTICE = ("Hot spot = thermal anomaly detected by satellite, not a confirmed fire. Cloud cover can hide fires: "
-          "a zero does not guarantee absence of fire. Data from different satellites are not summed.")
+          "a zero does not guarantee absence of fire. Data from different satellites are never summed on the same day.")
+# Fixed notice of the harmonization, written by the team (translated to English).
+HARMONIZATION_NOTICE = (
+    "MODIS data (2003-2011) are converted to VIIRS-equivalent units with a different factor for each month, estimated "
+    "from the years when both sensors overlap (2013-2025). They are estimates, not observations. The error can be larger "
+    "in regions and months with few detections. The assumption that the factor also holds in 2003-2011 cannot be "
+    "verified. Data from different satellites are never summed on the same day.")
 
 
 def day_index(s: pd.Series) -> list[int]:
@@ -61,7 +67,8 @@ def dump(obj: dict, path: Path) -> None:
 
 def alert_columns(df: pd.DataFrame, idx: pd.Series) -> dict:
     return {
-        "m": idx.tolist(), "d": day_index(df["date"]), "c": df["cells_7d"].astype(int).tolist(),
+        "m": idx.tolist(), "d": day_index(df["date"]),
+        "c": df["hotspots_7d"].astype(int).tolist() if pd.api.types.is_integer_dtype(df["hotspots_7d"]) else nums(df["hotspots_7d"], 1),
         "p75": nums(df["p75"], 1), "p90": nums(df["p90"], 1), "p975": nums(df["p97_5"], 1),
         "act": df["baseline_active_days"].astype(int).tolist(),
         "l": df["level"].map({n: i for i, n in enumerate(LEVELS)}).astype(int).tolist(),
@@ -70,11 +77,11 @@ def alert_columns(df: pd.DataFrame, idx: pd.Series) -> dict:
 
 def monthly_columns(df: pd.DataFrame, idx: pd.Series) -> dict:
     return {
-        "m": idx.tolist(), "mo": month_index(df["month"]), "cd": df["cell_days"].astype(int).tolist(),
+        "m": idx.tolist(), "mo": month_index(df["month"]), "cd": df["hotspots"].astype(int).tolist(),
         "ad": df["active_days"].astype(int).tolist(), "nd": df["no_data_days"].astype(int).tolist(),
         "ok": df["month_complete"].astype(int).tolist(),
         "d1": df["compare_first_day"].astype(int).tolist(), "d2": df["compare_last_day"].astype(int).tolist(),
-        "med": nums(df["hist_median_cell_days"], 1),
+        "med": nums(df["hist_median_hotspots"], 1),
         "ratio": nums(df["ratio_vs_median"], 2), "pct": nums(df["percentile_vs_history"], 1),
     }
 
@@ -88,6 +95,10 @@ def main() -> None:
     an_d = pd.read_parquet(P / "anomaly_departamento.parquet")
     mo_m = pd.read_parquet(P / "monthly_municipio.parquet")
     mo_d = pd.read_parquet(P / "monthly_departamento.parquet")
+    era_file = P / "anomaly_modis_era_departamento.parquet"
+    an_e = pd.read_parquet(era_file) if era_file.exists() else None
+    harmonization = json.loads((P / "harmonization.json").read_text(encoding="utf-8"))
+    harmonization["notice"] = HARMONIZATION_NOTICE
 
     depts = (lookup[["dpto_code", "dpto_name"]].drop_duplicates().sort_values("dpto_code").reset_index(drop=True))
     dept_idx = {c: i for i, c in enumerate(depts["dpto_code"])}
@@ -95,21 +106,30 @@ def main() -> None:
 
     # ---- status.json: one code per day of the continuous reference range
     s = status.sort_values("date")
-    national_cells = ref.groupby("date")["active_cells"].sum().reindex(s["date"], fill_value=0).astype(int)
+    national_daily = ref.groupby("date")["detections"].sum().reindex(s["date"], fill_value=0).astype(int)
+    era_days = pd.date_range(harmonization["modis_era"][0], harmonization["modis_era"][1], freq="D")
+    modis_daily = daily[daily["sensor"] == "MODIS_C61"].assign(date=lambda x: pd.to_datetime(x["date"]))
+    national_modis = modis_daily.groupby("date")["detections"].sum().reindex(era_days, fill_value=0).astype(int)
     dump({"start": str(s["date"].iloc[0]), "end": str(s["date"].iloc[-1]),
           "legend": STATUS, "status": s["status"].map({n: i for i, n in enumerate(STATUS)}).astype(int).tolist(),
-          "cells": national_cells.tolist()},
+          "c": national_daily.tolist(),
+          # National MODIS detections per day of the MODIS era (raw, before rescaling). The web app
+          # multiplies them by the monthly factor in manifest.harmonization.
+          "modis_era": {"start": era_days[0].date().isoformat(), "c": national_modis.tolist()}},
          OUT / "status.json")
 
     # ---- departments.json: department-level alerts and monthly (fallback for municipalities with little history)
     an_d = an_d.assign(i=an_d["dpto_code"].map(dept_idx))
     mo_d = mo_d.assign(i=mo_d["dpto_code"].map(dept_idx))
     dump({"departments": depts.rename(columns={"dpto_code": "code", "dpto_name": "name"}).to_dict("records"),
-          "alerts": alert_columns(an_d, an_d["i"]), "monthly": monthly_columns(mo_d, mo_d["i"])},
+          "alerts": alert_columns(an_d, an_d["i"]), "monthly": monthly_columns(mo_d, mo_d["i"]),
+          # Internal anomalies of the MODIS era (2003-2011), on MODIS rescaled to VIIRS units. Only for the
+          # departments that passed the harmonization test. Never compared with the VIIRS-era alerts.
+          "alerts_modis_era": alert_columns(an_e, an_e["dpto_code"].map(dept_idx)) if an_e is not None else None},
          OUT / "departments.json")
 
     # ---- one file per department
-    totals = {"ref_cells": 0, "alert_rows": 0, "month_rows": 0}
+    totals = {"ref_hotspots": 0, "alert_rows": 0, "month_rows": 0}
     sizes = {}
     for code in depts["dpto_code"]:
         mp = lookup[lookup["dpto_code"] == code].sort_values("mpio_code").reset_index(drop=True)
@@ -121,20 +141,24 @@ def main() -> None:
         dump({
             "code": code, "name": depts.loc[depts["dpto_code"] == code, "dpto_name"].iloc[0],
             "municipalities": mp[["mpio_code", "mpio_name"]].rename(columns={"mpio_code": "code", "mpio_name": "name"}).to_dict("records"),
-            "daily": {"m": r["mpio_code"].map(midx).tolist(), "d": day_index(r["date"]), "c": r["active_cells"].astype(int).tolist()},
+            "daily": {"m": r["mpio_code"].map(midx).tolist(), "d": day_index(r["date"]),
+                      "c": r["detections"].astype(int).tolist(), "k": r["active_cells"].astype(int).tolist()},
             "other_sensors": {"legend": SENSORS_EXTRA, "s": ex["sensor"].map({n: i for i, n in enumerate(SENSORS_EXTRA)}).tolist(),
-                              "m": ex["mpio_code"].map(midx).tolist(), "d": day_index(ex["date"]), "c": ex["active_cells"].astype(int).tolist()},
+                              "m": ex["mpio_code"].map(midx).tolist(), "d": day_index(ex["date"]),
+                              "c": ex["detections"].astype(int).tolist(), "k": ex["active_cells"].astype(int).tolist()},
             "alerts": alert_columns(a, a["mpio_code"].map(midx)),
             "monthly": monthly_columns(mo, mo["mpio_code"].map(midx)),
         }, OUT / "departments" / f"{code}.json")
-        totals["ref_cells"] += int(r["active_cells"].sum())
+        totals["ref_hotspots"] += int(r["detections"].sum())
         totals["alert_rows"] += len(a)
         totals["month_rows"] += len(mo)
         sizes[code] = (OUT / "departments" / f"{code}.json").stat().st_size
 
     # ---- manifest.json
     dump({
-        "notice": NOTICE, "day_base": DAY_BASE.isoformat(), "month_base": f"{MONTH_BASE[0]}-{MONTH_BASE[1]:02d}",
+        "notice": NOTICE, "quantity": info["parameters"]["quantity"],
+        "quantity_label": "hot spots (accepted FIRMS detections)", "harmonization": harmonization,
+        "day_base": DAY_BASE.isoformat(), "month_base": f"{MONTH_BASE[0]}-{MONTH_BASE[1]:02d}",
         "reference_range": info["reference_range"], "levels": LEVELS, "status_legend": STATUS,
         "other_sensors": SENSORS_EXTRA, "windows": {"cells_window_days": 7, "season_half_width_days": 15},
         "alert_floor_cells": 3, "min_baseline_active_days": 10,
@@ -146,7 +170,7 @@ def main() -> None:
     }, OUT / "manifest.json")
 
     # ---- sanity: the JSON must carry exactly what the tables carry
-    assert totals["ref_cells"] == int(ref["active_cells"].sum()), "reference cells differ from the table"
+    assert totals["ref_hotspots"] == int(ref["detections"].sum()), "reference hot spots differ from the table"
     assert totals["alert_rows"] == len(an_m) and totals["month_rows"] == len(mo_m), "row counts differ from the tables"
     biggest = sorted(sizes.items(), key=lambda kv: -kv[1])[:5]
     print(f"{len(sizes)} department files, total {sum(sizes.values()) / 1e6:.1f} MB; "

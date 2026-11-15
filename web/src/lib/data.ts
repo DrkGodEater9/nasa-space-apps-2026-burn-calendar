@@ -41,7 +41,7 @@ export async function loadBoot(): Promise<BootData> {
   }
   return {
     manifest,
-    ctx: makeRefContext(manifest.reference_range, status),
+    ctx: makeRefContext(manifest.reference_range, status, manifest.harmonization),
     national: indexNational(national),
     geo: buildGeoIndex(municipalities, departments),
   };

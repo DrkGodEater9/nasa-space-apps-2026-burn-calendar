@@ -43,7 +43,9 @@ def main() -> None:
         check(set(t[name]["mpio_code"]) <= codes, f"{name}: every mpio_code exists in the lookup")
     check(ref[["mpio_code", "date"]].duplicated().sum() == 0, "reference series has one row per municipality and day")
     check(daily[["mpio_code", "date", "sensor"]].duplicated().sum() == 0, "daily table has one row per municipality, day and sensor")
-    check((ref["active_cells"] > 0).all() and (daily["active_cells"] > 0).all(), "sparse tables contain only active_cells > 0")
+    check((ref["active_cells"] > 0).all() and (daily["active_cells"] > 0).all() and (ref["detections"] > 0).all(),
+          "sparse tables contain only rows with activity")
+    check(ref["detections"].ge(ref["active_cells"]).all(), "reference series: detections >= active_cells")
     check(daily["detections"].ge(daily["active_cells"]).all(), "detections >= active_cells everywhere")
 
     d = pd.to_datetime(status["date"])
@@ -60,22 +62,22 @@ def main() -> None:
           and daily.loc[daily["sensor"] == "MODIS_C61", "date"].min().year == 2003, "MODIS starts in 2003")
 
     # monthly totals must equal the reference series
-    ref_tot = ref.groupby("mpio_code")["active_cells"].sum()
-    mo_tot = mo_m.groupby("mpio_code")["cell_days"].sum()
-    check(ref_tot.sort_index().equals(mo_tot.reindex(ref_tot.index).sort_index()), "monthly cell_days add up to the reference series per municipality")
-    ref_dept_tot = ref.assign(d=ref["mpio_code"].str[:2]).groupby("d")["active_cells"].sum()
-    mo_dept_tot = mo_d.groupby("dpto_code")["cell_days"].sum()
+    ref_tot = ref.groupby("mpio_code")["detections"].sum()
+    mo_tot = mo_m.groupby("mpio_code")["hotspots"].sum()
+    check(ref_tot.sort_index().equals(mo_tot.reindex(ref_tot.index).sort_index()), "monthly hot spots add up to the reference series per municipality")
+    ref_dept_tot = ref.assign(d=ref["mpio_code"].str[:2]).groupby("d")["detections"].sum()
+    mo_dept_tot = mo_d.groupby("dpto_code")["hotspots"].sum()
     check(ref_dept_tot.sort_index().equals(mo_dept_tot.reindex(ref_dept_tot.index).sort_index()), "department monthly totals add up to the reference series")
 
     # anomaly table
     check(set(an_m["level"]) <= {"normal", "elevated", "unusual", "extreme", "insufficient"}, "anomaly levels are valid")
     ok = an_m[an_m["level"] != "insufficient"]
     check((ok["p75"] <= ok["p90"]).all() and (ok["p90"] <= ok["p97_5"]).all(), "percentiles are ordered P75 <= P90 <= P97.5")
-    check(an_m.loc[an_m["level"].isin(["unusual", "extreme"]), "cells_7d"].ge(3).all(), "unusual/extreme always have at least 3 cells")
+    check(an_m.loc[an_m["level"].isin(["unusual", "extreme"]), "hotspots_7d"].ge(3).all(), "unusual/extreme always have at least 3 hot spots")
     check((an_m.loc[an_m["level"] == "insufficient", "baseline_active_days"].lt(10) | an_m.loc[an_m["level"] == "insufficient", "baseline_samples"].eq(0)).all(),
           "insufficient only when baseline has < 10 active days")
     check(ok["baseline_active_days"].ge(10).all(), "non-insufficient rows have >= 10 baseline active days")
-    check((an_m["cells_7d"] > 0).all(), "anomaly rows only where the 7-day sum is positive")
+    check((an_m["hotspots_7d"] > 0).all(), "anomaly rows only where the 7-day sum is positive")
     check(an_d["dpto_code"].str.len().eq(2).all(), "department anomalies use 2-character codes")
 
     # months
@@ -98,9 +100,32 @@ def main() -> None:
             a = pd.Timestamp(y, last_month.month, int(r0["compare_first_day"]))
             b = pd.Timestamp(y, last_month.month, int(r0["compare_last_day"]))
             if a >= first_ref:
-                sums.append(int(rd.loc[rd["dt"].between(a, b), "active_cells"].sum()))
-        check(abs(float(np.median(sums)) - float(r0["hist_median_cell_days"])) < 0.01 and len(sums) == int(r0["history_years"]),
+                sums.append(int(rd.loc[rd["dt"].between(a, b), "detections"].sum()))
+        check(abs(float(np.median(sums)) - float(r0["hist_median_hotspots"])) < 0.01 and len(sums) == int(r0["history_years"]),
               f"current partial month (Cumaribo, days {r0['compare_first_day']}-{r0['compare_last_day']}) uses the same days in {len(sums)} other years")
+
+    # harmonization: the rule is used only if the national test passed, and only where the department passed
+    hfile = P / "harmonization.json"
+    if hfile.exists():
+        import json as _json
+        h = _json.loads(hfile.read_text(encoding="utf-8"))
+        hs = _json.loads((P / "harmonization_summary.json").read_text(encoding="utf-8"))
+        q = "detections" if h["quantity"] == "detections" else "cells"
+        check(h["accepted"] == hs["results"][q]["national_pass"], "harmonization is accepted exactly when the national test passes")
+        check(hs["results"][q]["h1_median_over_156_year_months_pct"] <= hs["national_margin_pct"]
+              and hs["results"][q]["h2_worst_calendar_month_median_pct"] <= hs["national_margin_pct"],
+              f"national test within the {hs['national_margin_pct']}% margin under both readings")
+        check(hs["quantity_with_lower_national_error"] == q, "the harmonized quantity is the one with the lower national error")
+        check(len(h["factors"]) == 12 and all(f > 0 for f in h["factors"]), "12 positive monthly factors")
+        if "anomaly_modis_era_departamento" in t:
+            era = t["anomaly_modis_era_departamento"]
+            shown = {c for c, v in h["departments"].items() if v["status"] in ("ok", "low_confidence")}
+            check(set(era["dpto_code"]) <= shown, "MODIS-era anomalies exist only for departments that passed the test")
+            check(pd.to_datetime(era["date"]).max() < pd.to_datetime(status["date"]).min(), "MODIS-era anomalies end before the VIIRS reference starts")
+            check(pd.to_datetime(era["date"]).min().year >= 2003, "MODIS era starts in 2003")
+            eok = era[era["level"] != "insufficient"]
+            check(era.loc[era["level"].isin(["unusual", "extreme"]), "hotspots_7d"].ge(3).all() and (eok["p75"] <= eok["p97_5"]).all(),
+                  "MODIS-era anomalies follow the same alert rules")
 
     # static-source mask must catch Galeras and the biggest known fixed sources
     mask = t["static_source_mask"]
@@ -127,14 +152,14 @@ def main() -> None:
             total_cells += sum(j["daily"]["c"])
             total_alerts += len(j["alerts"]["c"])
             total_months += len(j["monthly"]["cd"])
-        check(total_cells == int(ref["active_cells"].sum()), "web JSON: daily cells add up to the reference series")
+        check(total_cells == int(ref["detections"].sum()), "web JSON: daily hot spots add up to the reference series")
         check(total_alerts == len(an_m) and total_months == len(mo_m), "web JSON: alert and month rows match the tables")
         j52 = json.loads((web / "departments" / "52.json").read_text(encoding="utf-8"))
         codes52 = [m["code"] for m in j52["municipalities"]]
         rebuilt = pd.DataFrame({"mpio_code": [codes52[i] for i in j52["daily"]["m"]],
                                 "date": [(base + pd.Timedelta(days=int(x))).date() for x in j52["daily"]["d"]],
-                                "active_cells": j52["daily"]["c"]}).sort_values(["mpio_code", "date"]).reset_index(drop=True)
-        orig = ref[ref["mpio_code"].str.startswith("52")][["mpio_code", "date", "active_cells"]].sort_values(["mpio_code", "date"]).reset_index(drop=True)
+                                "detections": j52["daily"]["c"], "active_cells": j52["daily"]["k"]}).sort_values(["mpio_code", "date"]).reset_index(drop=True)
+        orig = ref[ref["mpio_code"].str.startswith("52")][["mpio_code", "date", "detections", "active_cells"]].sort_values(["mpio_code", "date"]).reset_index(drop=True)
         check(rebuilt.equals(orig), "web JSON: department 52 daily series decodes to the exact table rows")
         st = json.loads((web / "status.json").read_text(encoding="utf-8"))
         check(len(st["status"]) == len(status), "web JSON: status has one code per reference day")

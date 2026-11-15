@@ -6,7 +6,7 @@ import type { BootData } from '../lib/data.ts';
 import { loadDept } from '../lib/data.ts';
 import type { Area, ColorMode, MapTool, Sensor } from '../lib/types.ts';
 import {
-  computeAreaSeries, findEpisodes, modisYearTotals, municipalLevelsAt, nationalAt, nationalMonthly,
+  computeAreaSeries, findEpisodes, harmonizedYearTotals, modisYearTotals, municipalLevelsAt, nationalAt, nationalMonthly,
   summarizeRange, yearTotals, type IndexedDept, type RangeSummary,
 } from '../lib/analysis.ts';
 import {
@@ -42,7 +42,6 @@ export function ExplorePage({ boot, params, onParams }: Props) {
   // ------------------------------------------------------------ state (seeded from the URL)
   const [area, setArea] = useState<Area | null>(() => (params.get('area') ? areaFromKey(geo, params.get('area')!) : null));
   const [sensor, setSensor] = useState<Sensor>(() => (['ref', 'modis', 'n21'].includes(params.get('sensor') ?? '') ? (params.get('sensor') as Sensor) : 'ref'));
-  const minDay = isoToDay(SENSOR_START[sensor]);
   const [range, setRange] = useState<[number, number]>(() => {
     const f = params.get('from');
     const t = params.get('to');
@@ -97,6 +96,9 @@ export function ExplorePage({ boot, params, onParams }: Props) {
 
   const ready = !!area && area.dptoCodes.every((c) => depts.has(c));
   const series = useMemo(() => (ready && area ? computeAreaSeries(area, depts, national, ctx) : null), [ready, area, depts, national, ctx]);
+  // The single calendar goes back to 2003 only where the area shows MODIS rescaled to VIIRS units.
+  const hasEra = sensor === 'ref' && !!series?.era;
+  const minDay = hasEra ? 0 : isoToDay(SENSOR_START[sensor]);
   const loadedDepts = useMemo(() => (ready && area ? area.dptoCodes : []), [ready, area]);
   const mapDepts = useMemo(() => new Map([...depts].filter(([c]) => loadedDepts.includes(c))), [depts, loadedDepts]);
   const muniLevels = useMemo(() => municipalLevelsAt(mapDepts, focusDay), [mapDepts, focusDay]);
@@ -112,7 +114,7 @@ export function ExplorePage({ boot, params, onParams }: Props) {
     if (sensor === 'ref') return summarizeRange(series, ctx, viewFrom, to);
     const out: RangeSummary = {
       days: to - viewFrom + 1, cellDays: 0, activeDays: 0, noDataDays: 0, filledDays: 0, peakDay: -1, peakCells: 0,
-      levelDays: [0, 0, 0, 0, 0], lastLevel: -1, lastLevelDay: to,
+      levelDays: [0, 0, 0, 0, 0], lastLevel: -1, lastLevelDay: to, estimatedDays: 0,
     };
     for (let d = viewFrom; d <= to; d++) {
       const v = valueAt(series, sensor, d);
@@ -131,7 +133,11 @@ export function ExplorePage({ boot, params, onParams }: Props) {
     return series.monthly.filter((r) => r.mo >= a && r.mo <= b);
   }, [series, from, to, refStart]);
   // Derived tables, computed once per area or range instead of on every render.
-  const refYearTotals = useMemo(() => (series ? yearTotals(series.monthly) : []), [series]);
+  const refYearTotals = useMemo(
+    () => (series ? harmonizedYearTotals(series.era ? series.era.est : null, refStart, yearTotals(series.monthly)) : []),
+    [series, refStart],
+  );
+  const natYearTotals = useMemo(() => harmonizedYearTotals(ctx.nationalEra, refStart, yearTotals(natMonthly)), [ctx, refStart, natMonthly]);
   const modisTotals = useMemo(() => (series && sensor === 'modis' ? modisYearTotals(series.modis) : []), [series, sensor]);
   const refSummary = useMemo(() => (series ? summarizeRange(series, ctx, Math.max(from, refStart), to) : null), [series, ctx, from, to, refStart]);
   const headlineMonth = useMemo(() => [...rangeMonths].reverse().find((r) => r.ok) ?? null, [rangeMonths]);
@@ -212,7 +218,7 @@ export function ExplorePage({ boot, params, onParams }: Props) {
 
   const bounds = (area && areaBounds(geo, area)) || COLOMBIA_BOUNDS;
   const memberNames = useMemo(() => area?.members.map((m) => m.name) ?? [], [area]);
-  const sensorLabel = sensor === 'ref' ? 'VIIRS reference' : sensor === 'modis' ? 'MODIS C6.1' : 'NOAA-21, info';
+  const sensorLabel = sensor === 'ref' ? (hasEra && viewFrom < refStart ? 'MODIS rescaled + VIIRS' : 'VIIRS reference') : sensor === 'modis' ? 'MODIS C6.1, raw' : 'NOAA-21, info';
 
   return (
     <div className="explore">
@@ -223,6 +229,8 @@ export function ExplorePage({ boot, params, onParams }: Props) {
             day={focusDay}
             depts={deptLevels}
             monthly={natMonthly}
+            years={natYearTotals}
+            harm={ctx.harm}
             onDepartment={onDepartment}
             onMunicipality={onMunicipality}
             onPoint={onPoint}
@@ -274,7 +282,7 @@ export function ExplorePage({ boot, params, onParams }: Props) {
                   <div className={`sensor-note ${sensor}`}>
                     <Icon name="info" />
                     {sensor === 'modis'
-                      ? 'Long history (MODIS). MODIS pixels are about 7 times larger than VIIRS pixels, so these counts are lower and must not be compared with the VIIRS reference series. No alerts are computed from MODIS, and data gaps are not flagged in this view.'
+                      ? 'MODIS, raw. These are MODIS hot spots as observed, not rescaled. MODIS pixels are about 7 times larger than VIIRS pixels, so the counts are lower and must not be compared directly with VIIRS. No alerts are computed here, and data gaps are not flagged in this view.'
                       : 'NOAA-21 is an informational layer. Its history since 2023 is too short for a baseline, so it has no anomaly levels and is never added to the reference series.'}
                   </div>
                 )}
@@ -282,7 +290,7 @@ export function ExplorePage({ boot, params, onParams }: Props) {
                 <Card
                   title="Activity calendar"
                   icon="calendar"
-                  sub={<>{viewCaption(viewOf(viewFrom, to, minDay, refEnd), viewFrom, to)}<br />Each square is one day · {sensor === 'ref' ? 'active 1 km cells (VIIRS reference)' : sensorLabel}{years > 1 ? ' · click a year to open only that year' : ''}</>}
+                  sub={<>{viewCaption(viewOf(viewFrom, to, minDay, refEnd), viewFrom, to)}<br />Each square is one day · {sensor === 'ref' ? (hasEra ? 'hot spots, harmonized MODIS + VIIRS (hatched days are estimates)' : 'hot spots (VIIRS reference)') : sensorLabel}{years > 1 ? ' · click a year to open only that year' : ''}</>}
                   actions={
                     <div className="menu-wrap">
                       <button className="btn primary" onClick={() => setCsvMenu(!csvMenu)} aria-expanded={csvMenu}>
@@ -290,8 +298,8 @@ export function ExplorePage({ boot, params, onParams }: Props) {
                       </button>
                       {csvMenu && (
                         <div className="menu" role="menu" onMouseLeave={() => setCsvMenu(false)}>
-                          <button role="menuitem" onClick={() => { dailyCsv(area, series, ctx, Math.max(from, refStart), to); setCsvMenu(false); }}>
-                            <b>Daily series</b><small>One row per day: cells, 7-day total, level, sensor, gaps</small>
+                          <button role="menuitem" onClick={() => { dailyCsv(area, series, ctx, hasEra ? viewFrom : Math.max(from, refStart), to); setCsvMenu(false); }}>
+                            <b>Daily series</b><small>One row per day: hot spots, 7-day total, level, sensor, gaps{hasEra ? ', estimated days marked' : ''}</small>
                           </button>
                           {area.members.length > 1 && (
                             <button role="menuitem" onClick={() => { memberCsv(area, series, Math.max(from, refStart), to); setCsvMenu(false); }}>
@@ -299,7 +307,7 @@ export function ExplorePage({ boot, params, onParams }: Props) {
                             </button>
                           )}
                           <button role="menuitem" onClick={() => { monthlyCsv(area, series, Math.max(from, refStart), to); setCsvMenu(false); }}>
-                            <b>Monthly vs. history</b><small>Cell-days, median of the same month, ratio and percentile</small>
+                            <b>Monthly vs. history</b><small>Hot spots, median of the same month, ratio and percentile</small>
                           </button>
                         </div>
                       )}
@@ -325,22 +333,27 @@ export function ExplorePage({ boot, params, onParams }: Props) {
 
 
                 {sensor === 'modis' && (
-                  <Card title="Long history (MODIS)" icon="clock" sub="MODIS Collection 6.1 cell-days per year, compared only with itself. 2000–2002 are excluded (only Terra was flying).">
+                  <Card title="MODIS, raw" icon="clock" sub="MODIS Collection 6.1 hot spots per year, as observed and not rescaled. 2000–2002 are excluded: a single satellite and incomplete data.">
                     <YearBars totals={modisTotals} accent />
                   </Card>
                 )}
 
-                <Card title="This month vs. normal" icon="chart" sub="Monthly cell-days in the selected dates against the median of the same month in the other years since 2012 (VIIRS reference).">
+                <Card title="This month vs. normal" icon="chart" sub="Monthly hot spots in the selected dates against the median of the same month in the other years since 2012 (VIIRS reference). The MODIS era is not part of this baseline.">
                   <MonthHeadline row={headlineMonth} partial={partialMonth} />
                   {rangeMonths.length > 1 && <MonthlyChart rows={rangeMonths} />}
                 </Card>
 
-                <Card title="When does it burn?" icon="layers" sub="Every month since 2012. Darker is quieter, brighter is more active. The bars below show the typical month.">
+                <Card title="When does it burn?" icon="layers" sub="Every month since 2012 (VIIRS). Darker is quieter, brighter is more active. The bars below show the typical month.">
                   <div className="season-grid">
                     <SeasonalityMatrix rows={series.monthly} />
                     <div className="season-side">
                       <h4>Busiest years</h4>
-                      <YearBars totals={refYearTotals} note="Cell-days per year. 2012 starts on 20 January." />
+                      <YearBars
+                        totals={refYearTotals}
+                        note={series.era
+                          ? 'Hot spots per year. 2003–2011 are MODIS rescaled to VIIRS units (estimated, lighter bars); 2012 adds 19 estimated days. The busiest-year mark uses observed years only.'
+                          : 'Hot spots per year. 2012 starts on 20 January.'}
+                      />
                       <h4>Busiest months on record</h4>
                       <TopMonths rows={series.monthly} />
                     </div>
@@ -350,7 +363,7 @@ export function ExplorePage({ boot, params, onParams }: Props) {
                 <Card
                   title="Unusual activity"
                   icon="warning"
-                  sub={<>Runs of days whose 7-day total is above the 90th percentile for that place and season (at least 3 cells). {fmtInt(episodes.length)} in the selected dates.</>}
+                  sub={<>Runs of days whose 7-day total is above the 90th percentile for that place and season (at least 3 hot spots). VIIRS era only. {fmtInt(episodes.length)} in the selected dates.</>}
                 >
                   <Episodes episodes={episodes} onFocus={setFocusDay} />
                 </Card>

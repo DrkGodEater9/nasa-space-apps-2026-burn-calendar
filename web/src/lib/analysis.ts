@@ -5,7 +5,7 @@
 // and recomputes the "same month in other years" comparison for those sums, with the same
 // rule the pipeline uses for single units (checked by scripts/verify-analysis.ts).
 
-import type { AlertBlock, Area, DeptFile, NationalFile, StatusFile } from './types.ts';
+import type { AlertBlock, Area, DeptFile, Harmonization, HarmonizationStatus, NationalFile, StatusFile } from './types.ts';
 import {
   LEVEL_EXTREME, LEVEL_INSUFFICIENT, LEVEL_NONE, LEVEL_UNUSUAL, levelRank,
 } from './colors.ts';
@@ -66,6 +66,8 @@ export interface IndexedNational {
   deptIndex: Map<string, number>;
   alertRows: Int32Array[];
   monthlyRows: Int32Array[];
+  /** Rows of alerts_modis_era per department, or null when the file has none. */
+  eraRows: Int32Array[] | null;
 }
 
 export function indexNational(file: NationalFile): IndexedNational {
@@ -75,6 +77,7 @@ export function indexNational(file: NationalFile): IndexedNational {
     deptIndex: new Map(file.departments.map((u, i) => [u.code, i])),
     alertRows: groupRows(file.alerts.m, file.alerts.d, n),
     monthlyRows: groupRows(file.monthly.m, file.monthly.mo, n),
+    eraRows: file.alerts_modis_era ? groupRows(file.alerts_modis_era.m, file.alerts_modis_era.d, n) : null,
   };
 }
 
@@ -83,24 +86,53 @@ export interface RefContext {
   refEnd: number;
   /** Status code per reference day: 0 S-NPP, 1 NOAA-20 fill, 2 no data. */
   status: Int8Array;
-  /** National active cells per reference day (sum of all municipalities), or null with an older status.json. */
+  /** National hot spots per reference day (sum of all municipalities), or null with an older status.json. */
   nationalCells: Int32Array | null;
+  /** The accepted harmonization rule, or null when the test failed or the data has none. */
+  harm: Harmonization | null;
+  /** 1 on the days of the MODIS era without MODIS data, indexed by day since 2003-01-01. */
+  eraNoData: Uint8Array;
+  /** National MODIS rescaled to VIIRS units (estimated), indexed by day since 2003-01-01, before refStart. */
+  nationalEra: Float32Array | null;
 }
 
-export function makeRefContext(range: [string, string], statusFile: StatusFile): RefContext {
+/** MODIS value of one day converted to VIIRS-equivalent units with the factor of its calendar month. */
+export function rescale(harm: Harmonization, day: number, raw: number): number {
+  return raw * harm.factors[dayParts(day).m];
+}
+
+export function makeRefContext(range: [string, string], statusFile: StatusFile, harmonization?: Harmonization): RefContext {
   const refStart = isoToDay(range[0]);
   const refEnd = isoToDay(range[1]);
   const status = new Int8Array(refEnd - refStart + 1).fill(-1);
-  const nationalCells = statusFile.cells ? new Int32Array(refEnd - refStart + 1) : null;
+  const nationalCells = statusFile.c ? new Int32Array(refEnd - refStart + 1) : null;
   const off = isoToDay(statusFile.start) - refStart;
   statusFile.status.forEach((s, i) => {
     const k = i + off;
     if (k >= 0 && k < status.length) {
       status[k] = s;
-      if (nationalCells && statusFile.cells) nationalCells[k] = statusFile.cells[i];
+      if (nationalCells && statusFile.c) nationalCells[k] = statusFile.c[i];
     }
   });
-  return { refStart, refEnd, status, nationalCells };
+  const harm = harmonization && harmonization.accepted ? harmonization : null;
+  const eraNoData = new Uint8Array(Math.max(0, refStart));
+  let nationalEra: Float32Array | null = null;
+  if (harm) {
+    for (const iso of harm.modis_no_data_days) {
+      const d = isoToDay(iso);
+      if (d >= 0 && d < refStart) eraNoData[d] = 1;
+    }
+    if (statusFile.modis_era) {
+      const values = new Float32Array(refStart);
+      const start = isoToDay(statusFile.modis_era.start);
+      statusFile.modis_era.c.forEach((v, i) => {
+        const d = start + i;
+        if (d >= 0 && d < refStart) values[d] = rescale(harm, d, v);
+      });
+      nationalEra = values;
+    }
+  }
+  return { refStart, refEnd, status, nationalCells, harm, eraNoData, nationalEra };
 }
 
 export const STATUS_SNPP = 0;
@@ -140,10 +172,29 @@ export interface MonthStat {
   histYears: number;
 }
 
+/** Why the area does or does not show the MODIS era inside the single calendar. */
+export type EraReason = 'shown' | 'department_failed' | 'insufficient' | 'scale_not_tested' | 'rule_not_accepted';
+
+/** MODIS rescaled to VIIRS units for the days before the VIIRS reference starts. Estimates, not observations. */
+export interface EraSeries {
+  /** Estimated hot spots per day, indexed by day since 2003-01-01 (length refStart). */
+  est: Float32Array;
+  /** 7-day total of `est`. */
+  est7: Float32Array;
+  /** Internal anomaly level of the MODIS era (against 2003-2011 only), -1 when none. */
+  level: Int8Array;
+  status: HarmonizationStatus;
+  /** Median test error of this department per calendar month, percent (null when not evaluable). */
+  errorPct: (number | null)[];
+}
+
 export interface AreaSeries {
+  /** MODIS era in VIIRS-equivalent units, only for departments that passed the harmonization test. */
+  era: EraSeries | null;
+  eraReason: EraReason;
   refStart: number;
   refEnd: number;
-  /** Reference series (VIIRS S-NPP, NOAA-20 fill), indexed by day - refStart. */
+  /** Reference series in hot spots (VIIRS S-NPP, NOAA-20 fill), indexed by day - refStart. */
   cells: Int32Array;
   cells7: Int32Array;
   level: Int8Array;
@@ -152,6 +203,8 @@ export interface AreaSeries {
   /** Member index that sets the area level that day (-1 when none). */
   driver: Int16Array;
   memberCells: Int32Array[];
+  /** Active 1 km cells of the reference series (secondary figure), same index as `cells`. */
+  activeCells: Int32Array;
   /** Informational NOAA-21 series, same index as `cells`. */
   n21: Int32Array;
   /** MODIS Collection 6.1 series, indexed by day since 2003-01-01. */
@@ -171,6 +224,7 @@ export function computeAreaSeries(
   const { refStart, refEnd } = ctx;
   const len = refEnd - refStart + 1;
   const cells = new Int32Array(len);
+  const activeCells = new Int32Array(len);
   const n21 = new Int32Array(len);
   const modis = new Int32Array(refEnd + 1);
   const level = new Int8Array(len).fill(LEVEL_NONE);
@@ -189,6 +243,7 @@ export function computeAreaSeries(
       if (i >= 0 && i < len) {
         memberCells[k][i] += daily.c[r];
         cells[i] += daily.c[r];
+        if (daily.k) activeCells[i] += daily.k[r];
       }
     }
     for (const r of dep.otherRows[m]) {
@@ -255,6 +310,40 @@ export function computeAreaSeries(
     cells7[i] = acc;
   }
 
+  // MODIS era inside the single calendar: only where the team's rule was tested and passed, which is
+  // the department scale. Municipalities and drawn areas were not tested, so they are never rescaled.
+  let era: EraSeries | null = null;
+  let eraReason: EraReason = 'rule_not_accepted';
+  if (ctx.harm) {
+    const code = area.dptoCodes[0];
+    const info = isDepartment ? ctx.harm.departments[code] : undefined;
+    if (!isDepartment) eraReason = 'scale_not_tested';
+    else if (!info || info.status === 'insufficient') eraReason = 'insufficient';
+    else if (info.status === 'viirs_only') eraReason = 'department_failed';
+    else {
+      eraReason = 'shown';
+      const est = new Float32Array(refStart);
+      const est7 = new Float32Array(refStart);
+      const eraLevel = new Int8Array(refStart).fill(LEVEL_NONE);
+      let sum = 0;
+      for (let d = 0; d < refStart; d++) {
+        est[d] = rescale(ctx.harm, d, modis[d]);
+        sum += est[d];
+        if (d >= 7) sum -= est[d - 7];
+        est7[d] = sum;
+      }
+      const ea = national.file.alerts_modis_era;
+      const di = national.deptIndex.get(code);
+      if (ea && national.eraRows && di !== undefined) {
+        for (const r of national.eraRows[di]) {
+          const d = ea.d[r];
+          if (d >= 0 && d < refStart) eraLevel[d] = ea.l[r];
+        }
+      }
+      era = { est, est7, level: eraLevel, status: info.status, errorPct: info.error_pct };
+    }
+  }
+
   let baselineAt: AreaSeries['baselineAt'] = null;
   if (isDepartment) {
     const di = national.deptIndex.get(area.dptoCodes[0]);
@@ -277,6 +366,8 @@ export function computeAreaSeries(
   }
 
   return {
+    era,
+    eraReason,
     refStart,
     refEnd,
     cells,
@@ -285,6 +376,7 @@ export function computeAreaSeries(
     fallback,
     driver,
     memberCells,
+    activeCells,
     n21,
     modis,
     monthly: computeMonthly(cells, ctx),
@@ -389,6 +481,8 @@ export interface RangeSummary {
   levelDays: number[];
   lastLevel: number;
   lastLevelDay: number;
+  /** Days in the range that come from MODIS rescaled to VIIRS units (estimates). */
+  estimatedDays: number;
 }
 
 export function summarizeRange(series: AreaSeries, ctx: RefContext, from: number, to: number): RangeSummary {
@@ -397,7 +491,20 @@ export function summarizeRange(series: AreaSeries, ctx: RefContext, from: number
   const out: RangeSummary = {
     days: Math.max(0, b - a + 1), cellDays: 0, activeDays: 0, noDataDays: 0, filledDays: 0,
     peakDay: -1, peakCells: 0, levelDays: [0, 0, 0, 0, 0], lastLevel: LEVEL_NONE, lastLevelDay: b,
+    estimatedDays: 0,
   };
+  // Days of the MODIS era (estimates), when the area shows them in the single calendar.
+  if (series.era && from < series.refStart) {
+    for (let day = Math.max(0, from); day <= Math.min(to, series.refStart - 1); day++) {
+      const c = Math.round(series.era.est[day]);
+      out.days++;
+      out.estimatedDays++;
+      out.cellDays += c;
+      if (c > 0) out.activeDays++;
+      if (c > out.peakCells) { out.peakCells = c; out.peakDay = day; }
+      if (ctx.eraNoData[day]) out.noDataDays++;
+    }
+  }
   for (let day = a; day <= b; day++) {
     const i = day - series.refStart;
     const c = series.cells[i];
@@ -452,6 +559,29 @@ export interface YearTotal {
   y: number;
   cd: number;
   complete: boolean;
+  /** True when the whole year is MODIS rescaled to VIIRS units (an estimate). */
+  est?: boolean;
+}
+
+/**
+ * Year totals of the single calendar: the MODIS era (estimated) followed by the VIIRS reference.
+ * `eraDaily` is indexed by day since 2003-01-01 and covers the days before refStart. The year in
+ * which the reference starts adds its few MODIS-era days to the VIIRS total.
+ */
+export function harmonizedYearTotals(eraDaily: ArrayLike<number> | null, refStart: number, ref: YearTotal[]): YearTotal[] {
+  if (!eraDaily) return ref;
+  const firstRefYear = dayParts(refStart).y;
+  const era = new Map<number, number>();
+  for (let d = 0; d < refStart; d++) {
+    const { y } = dayParts(d);
+    era.set(y, (era.get(y) ?? 0) + eraDaily[d]);
+  }
+  const out: YearTotal[] = [];
+  for (const [y, cd] of era) if (y < firstRefYear) out.push({ y, cd: Math.round(cd), complete: true, est: true });
+  for (const t of ref) {
+    out.push(t.y === firstRefYear ? { ...t, cd: t.cd + Math.round(era.get(firstRefYear) ?? 0), complete: true } : t);
+  }
+  return out;
 }
 
 export function yearTotals(monthly: MonthStat[]): YearTotal[] {

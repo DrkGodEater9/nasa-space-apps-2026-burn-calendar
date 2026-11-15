@@ -11,7 +11,7 @@ import { computeAreaSeries, indexDept, indexNational, makeRefContext, type Index
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'public', 'data', 'web');
 const load = <T>(f: string): T => JSON.parse(readFileSync(path.join(root, f), 'utf8')) as T;
 const manifest = load<Manifest>('manifest.json');
-const ctx = makeRefContext(manifest.reference_range, load<StatusFile>('status.json'));
+const ctx = makeRefContext(manifest.reference_range, load<StatusFile>('status.json'), manifest.harmonization);
 const national = indexNational(load<NationalFile>('departments.json'));
 
 let failures = 0;
@@ -69,7 +69,31 @@ for (const code of ['52', '50', '99', '11']) {
     const ss = computeAreaSeries(single, depts, national, ctx);
     check(`c7 ${u.code} d${a.d[r]} ${ss.cells7[a.d[r] - ctx.refStart]} vs ${a.c[r]}`, ss.cells7[a.d[r] - ctx.refStart] === a.c[r]);
   }
-  console.log(`dept ${code}: ${munis.size} municipalities, ${rowsChecked} municipal month rows, ${deptRows} department month rows`);
+  // Single calendar: the MODIS era is shown only where the harmonization test passed (department scale).
+  let eraRows = 0;
+  const harm = manifest.harmonization;
+  if (harm?.accepted) {
+    const status = harm.departments[code]?.status;
+    const expectShown = status === 'ok' || status === 'low_confidence';
+    check(`dept ${code} era shown=${!!s.era} but status=${status}`, !!s.era === expectShown);
+    const first = dep.file.municipalities[0];
+    const muni = computeAreaSeries({ kind: 'municipality', key: '', label: '', sublabel: '', dptoCodes: [code],
+      members: [{ mpio: first.code, dpto: code, name: first.name, dptoName: '', coverage: 1 }] }, depts, national, ctx);
+    check(`municipality ${first.code} must never be rescaled`, muni.era === null && muni.eraReason === 'scale_not_tested');
+    const ea = national.file.alerts_modis_era;
+    if (s.era && ea && national.eraRows) {
+      // The 7-day totals of the rescaled series match the pipeline (stored rounded to 1 decimal).
+      for (const r of national.eraRows[di]) {
+        eraRows++;
+        check(`era c7 dept ${code} d${ea.d[r]} ${s.era.est7[ea.d[r]]} vs ${ea.c[r]}`, Math.abs(s.era.est7[ea.d[r]] - ea.c[r]) <= 0.2);
+        check(`era level dept ${code} d${ea.d[r]}`, s.era.level[ea.d[r]] === ea.l[r]);
+        check(`era day before the reference dept ${code}`, ea.d[r] < ctx.refStart);
+      }
+    } else if (ea && national.eraRows) {
+      check(`dept ${code} has MODIS-era alerts but is not shown rescaled`, national.eraRows[di].length === 0);
+    }
+  }
+  console.log(`dept ${code}: ${munis.size} municipalities, ${rowsChecked} municipal month rows, ${deptRows} department month rows, ${eraRows} MODIS-era rows`);
 }
 console.log(failures ? `FAILED: ${failures} mismatches` : 'OK: web aggregation matches the data pipeline');
 process.exit(failures ? 1 : 0);

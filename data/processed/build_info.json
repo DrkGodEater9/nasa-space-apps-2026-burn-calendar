@@ -36,7 +36,7 @@
   ],
   "cells_outside_polygons": 3505,
   "ai_note": "Built by scripts/build_dataset.py, written with the help of an AI assistant (Claude Code), implementing the method decided by the Horum Labs team in docs/METHOD.md.",
-  "built_utc": "2026-11-15T00:52:00.815824+00:00",
+  "built_utc": "2026-11-15T03:05:01.508205+00:00",
   "parameters": {
     "cell_degrees": 0.01,
     "timezone": "UTC-5",
@@ -45,7 +45,8 @@
     "window_days": 7,
     "season_half_width_days": 15,
     "min_baseline_active_days": 10,
-    "min_cells_for_alert": 3,
+    "quantity": "detections",
+    "min_count_for_alert": 3,
     "max_missing_days_in_window": 3,
     "boundaries": "DANE MGN 2018 (data/processed/dane_mgn2018_municipios.geojson)"
   },

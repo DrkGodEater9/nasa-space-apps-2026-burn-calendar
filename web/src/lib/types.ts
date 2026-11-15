@@ -8,8 +8,32 @@ export interface DeptMeta {
   bytes: number;
 }
 
+export type HarmonizationStatus = 'ok' | 'low_confidence' | 'viirs_only' | 'insufficient';
+
+/** Result of the team's MODIS -> VIIRS rule and its leave-one-year-out test (docs/HARMONIZATION_RESULTS.md). */
+export interface Harmonization {
+  /** True when the national test passed. When false the sensors stay separate. */
+  accepted: boolean;
+  quantity: string;
+  overlap_years: [number, number];
+  /** First and last day shown as MODIS rescaled to VIIRS units. */
+  modis_era: [string, string];
+  /** One factor per calendar month (January first). */
+  factors: number[];
+  /** Median absolute test error per calendar month, national scale, in percent. */
+  national_error_pct: number[];
+  national_error_all_months_pct: number;
+  modis_no_data_days: string[];
+  departments: Record<string, { status: HarmonizationStatus; error_pct: (number | null)[] }>;
+  notice: string;
+}
+
 export interface Manifest {
   notice: string;
+  /** Harmonized quantity: "detections" (hot spots) or "active_cells". */
+  quantity?: string;
+  quantity_label?: string;
+  harmonization?: Harmonization;
   day_base: string;
   month_base: string;
   reference_range: [string, string];
@@ -28,15 +52,20 @@ export interface StatusFile {
   end: string;
   legend: string[];
   status: number[];
-  /** National active cells per day (same index as status). */
-  cells?: number[];
+  /** National hot spots per day (same index as status). */
+  c?: number[];
+  /** National MODIS hot spots per day of the MODIS era, raw (before the monthly factor). */
+  modis_era?: { start: string; c: number[] };
 }
 
 /** Columnar blocks: one array per column, all of equal length. */
 export interface DailyBlock {
   m: number[];
   d: number[];
+  /** Hot spots (accepted detections): the harmonized quantity. */
   c: number[];
+  /** Active 1 km cells, secondary figure. */
+  k?: number[];
 }
 
 export interface AlertBlock {
@@ -68,6 +97,7 @@ export interface OtherSensorsBlock {
   m: number[];
   d: number[];
   c: number[];
+  k?: number[];
 }
 
 export interface Unit {
@@ -89,6 +119,8 @@ export interface NationalFile {
   departments: Unit[];
   alerts: AlertBlock;
   monthly: MonthlyBlock;
+  /** Internal anomalies of the MODIS era, only for departments that passed the harmonization test. */
+  alerts_modis_era?: AlertBlock | null;
 }
 
 export type AreaKind = 'department' | 'municipality' | 'polygon' | 'point' | 'bbox';

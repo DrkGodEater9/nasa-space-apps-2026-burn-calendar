@@ -545,3 +545,10 @@ a.chip:hover { text-decoration: none; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
 }
+
+/* Estimated values: MODIS rescaled to VIIRS units. Always hatched, never shown as observations. */
+.lg-est { background-image: repeating-linear-gradient(-45deg, rgba(255, 255, 255, 0.55) 0 1px, transparent 1px 3.6px) !important; }
+.yb-fill.est {
+  opacity: 0.78;
+  background-image: repeating-linear-gradient(-45deg, rgba(255, 255, 255, 0.35) 0 1.5px, transparent 1.5px 5px), linear-gradient(90deg, #8f2469, #e9622c);
+}

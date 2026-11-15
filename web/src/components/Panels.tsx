@@ -149,8 +149,8 @@ export function RangeControls({ from, to, minDay, maxDay, onChange, sensor, onSe
           value={sensor}
           onChange={onSensor}
           options={[
-            { value: 'ref', label: 'Reference · VIIRS', title: 'VIIRS S-NPP since 2012, NOAA-20 fills its gaps. Used for all alerts.' },
-            { value: 'modis', label: 'Long history · MODIS', title: 'MODIS Collection 6.1 since 2003. Separate view, not comparable with VIIRS.' },
+            { value: 'ref', label: 'Harmonized calendar', title: 'VIIRS S-NPP since 2012 (NOAA-20 fills its gaps), used for all alerts. Departments that passed the harmonization test also show MODIS rescaled to VIIRS units back to 2003.' },
+            { value: 'modis', label: 'MODIS, raw', title: 'MODIS Collection 6.1 since 2003, as observed and not rescaled.' },
             { value: 'n21', label: 'NOAA-21 · info', title: 'VIIRS NOAA-21 since 2023. Informational layer only.' },
           ]}
         />
@@ -161,7 +161,7 @@ export function RangeControls({ from, to, minDay, maxDay, onChange, sensor, onSe
               value={colorMode}
               onChange={onColorMode}
               options={[
-                { value: 'cells', label: 'Active cells' },
+                { value: 'cells', label: 'Hot spots' },
                 { value: 'level', label: 'Anomaly level' },
               ]}
             />
@@ -186,9 +186,9 @@ export function Kpis({ s, sensorLabel, showLevels = true }: { s: RangeSummary; s
   return (
     <div className={`kpis ${showLevels ? '' : 'three'}`}>
       <div className="kpi">
-        <div className="kpi-label">Cell-days</div>
-        <div className="kpi-val">{fmtInt(s.cellDays)}</div>
-        <div className="kpi-sub">{sensorLabel}</div>
+        <div className="kpi-label">Hot spots</div>
+        <div className="kpi-val">{s.estimatedDays ? '≈ ' : ''}{fmtInt(s.cellDays)}</div>
+        <div className="kpi-sub">{sensorLabel}{s.estimatedDays ? ` · ${fmtInt(s.estimatedDays)} estimated days` : ''}</div>
       </div>
       <div className="kpi">
         <div className="kpi-label">Days with activity</div>
@@ -197,7 +197,7 @@ export function Kpis({ s, sensorLabel, showLevels = true }: { s: RangeSummary; s
       </div>
       <div className="kpi">
         <div className="kpi-label">Peak day</div>
-        <div className="kpi-val">{s.peakDay >= 0 ? fmtInt(s.peakCells) : '—'}<small> cells</small></div>
+        <div className="kpi-val">{s.peakDay >= 0 ? fmtInt(s.peakCells) : '—'}<small> hot spots</small></div>
         <div className="kpi-sub">{s.peakDay >= 0 ? formatDay(s.peakDay, false) : 'no activity'}</div>
       </div>
       {showLevels && <div className="kpi">
@@ -237,7 +237,7 @@ export function Episodes({ episodes, onFocus }: { episodes: Episode[]; onFocus: 
                   <small>{plural(days, 'day')}</small>
                 </span>
                 <span className="ep-peak">
-                  {fmtInt(e.peakCells7)}<small>cells / 7 days at peak</small>
+                  {fmtInt(e.peakCells7)}<small>hot spots / 7 days at peak</small>
                 </span>
                 <Icon name="arrow" size={14} />
               </button>
@@ -265,7 +265,7 @@ export function DataQuality({ area, series, summary, ctx, from, to }: {
   const items: { tone: 'ok' | 'warn' | 'info'; text: ReactNode }[] = [];
   items.push(
     summary.noDataDays
-      ? { tone: 'warn', text: <><b>{plural(summary.noDataDays, 'day')}</b> without data from either VIIRS satellite (striped in the calendar){longest > 1 ? `; the longest gap lasts ${longest} days` : ''}. These are gaps, not zeros.</> }
+      ? { tone: 'warn', text: <><b>{plural(summary.noDataDays, 'day')}</b> without satellite data (striped in the calendar){longest > 1 ? `; the longest VIIRS gap lasts ${longest} days` : ''}. These are gaps, not zeros.</> }
       : { tone: 'ok', text: <>No days without satellite data in this range.</> },
   );
   if (summary.filledDays) {
@@ -285,6 +285,22 @@ export function DataQuality({ area, series, summary, ctx, from, to }: {
   }
   if (area.members.length > 1 && area.kind !== 'department') {
     items.push({ tone: 'info', text: <>For several municipalities the level shown each day is the highest among them.</> });
+  }
+  if (series.eraReason === 'shown' && series.era) {
+    items.push({
+      tone: series.era.status === 'low_confidence' ? 'warn' : 'info',
+      text: <>
+        Days before {formatDay(ctx.refStart, false)} are <b>MODIS rescaled to VIIRS units (estimated)</b>, hatched in the calendar.
+        {series.era.status === 'low_confidence' ? <> For this department the estimated error is above 30%, so read them as low confidence.</> : null}
+        {ctx.harm ? <> {ctx.harm.notice}</> : null}
+      </>,
+    });
+  } else if (series.eraReason === 'department_failed') {
+    items.push({ tone: 'warn', text: <>This department <b>did not pass the harmonization test</b> (estimated error above 30% in most months), so its calendar starts in 2012. MODIS 2003–2011 is shown raw, not rescaled, in the "MODIS, raw" view.</> });
+  } else if (series.eraReason === 'insufficient') {
+    items.push({ tone: 'info', text: <>There are too few detections here to evaluate the harmonization, so the calendar starts in 2012. MODIS 2003–2011 is shown raw in the "MODIS, raw" view.</> });
+  } else if (series.eraReason === 'scale_not_tested') {
+    items.push({ tone: 'info', text: <>The single calendar from 2003 exists for the departments that passed the harmonization test and for the national totals. The rescaling was <b>not tested at municipality scale</b>, so this area starts in 2012. MODIS 2003–2011 is shown raw in the "MODIS, raw" view.</> });
   }
   items.push({ tone: 'info', text: <>Cloud cover can hide fires: a zero does not guarantee absence of fire.</> });
 
