@@ -45,6 +45,8 @@ The method and the harmonization rule are the team's. AI assistants were used to
 - **Finding gaps.** When the team described what it wanted, the AI pointed out open questions and cases the data would hit. The team decided each one.
 - **Reading reference material.** Claude Code extracted the IDEAM figures from the official PDF reports; places 6 to 10 of each list were read from chart images. Claude Desktop searched for sources on the Meta-Caquetá limit and computed descriptive tables from the project data. Those sources were not re-checked by the team, and the press sources are not official documents.
 - **Implementation details.** A few details were not fixed in the team's text, such as the exact confidence cutoffs and what counts as a day without data. They were set during implementation, are marked "(confirmed default)" in `docs/METHOD.md`, and were reviewed and confirmed by a team member.
+- **Demo video narration.** The voice of the demo video is AI-generated with ElevenLabs from an English script. The video is a screen recording of the real web app and labels the narration as AI-generated on screen.
+- **Images.** No AI-generated images are used. The site has no logo; its mark is a simple flame line icon from the interface's icon set.
 - **Final integrity sweep.** Claude Code was used at the end to verify the project as a whole: the data checks (`scripts/check_dataset.py`), the agreement between the web app and the pipeline (`npm run verify`), the accessibility checks (`npm run a11y`), and the consistency of the documents with the code.
 
 No IDEAM or FIRMS figure was invented or estimated. Values read from IDEAM charts are marked as such in `data/processed/ideam_semester_departments.csv`. No NASA logos or emblems are used.

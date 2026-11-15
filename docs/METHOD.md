@@ -1,6 +1,6 @@
 # Method
 
-How the Colombia Burn Calendar turns the NASA FIRMS hot spots of four satellites into one calendar from 2003 to today. These are the decisions of the Horum Labs team, with the reason for each.
+How the Colombia Burn Calendar turns the NASA FIRMS hot spots of four satellites into one calendar from January 1, 2003 to November 13, 2026 (the current data snapshot). These are the decisions of the Horum Labs team, with the reason for each.
 
 *AI note: the method is the team's. Claude Code wrote this document from the team's text and decisions, and implemented it. A few details that the team text did not fix were set during implementation and then reviewed and confirmed by a team member on November 14, 2026. Those points are marked "(confirmed default)". The first version of this method kept MODIS apart from VIIRS; the single calendar from 2003 was added on November 14, 2026, after the test in [HARMONIZATION.md](HARMONIZATION.md).*
 

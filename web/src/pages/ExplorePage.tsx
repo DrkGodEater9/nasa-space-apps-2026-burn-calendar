@@ -287,6 +287,7 @@ export function ExplorePage({ boot, params, onParams }: Props) {
           <NationalOverview
             geo={geo}
             day={focusDay}
+            dataEnd={refEnd}
             depts={deptLevels}
             monthly={natMonthly}
             years={natYearTotals}

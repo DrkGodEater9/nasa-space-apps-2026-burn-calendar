@@ -114,9 +114,10 @@ export function DataPage() {
             </p>
             <p>
               AI assistants were used to speed up the work: Claude Code (Anthropic) helped write the data scripts, the data
-              documentation and this web application; Codex helped with the DANE boundary processing. Every AI-assisted file
-              carries a note in its header. No figure was invented or estimated by AI. <b>The project logo and favicon are AI-generated:</b> drawn
-              in code (SVG) by Claude Code. They are not an agency insignia.
+              documentation and this web application; Claude Desktop (Anthropic) searched for sources and computed descriptive
+              tables; Codex helped with the DANE boundary processing. Every AI-assisted file carries a note in its header. No
+              figure was invented or estimated by AI. No AI-generated images are used: the site's mark is a plain flame icon.
+              The narration of the demo video is an AI-generated voice (ElevenLabs).
             </p>
           </div>
         </div>
@@ -125,7 +126,7 @@ export function DataPage() {
       <section className="doc-section">
         <h2>About</h2>
         <p>
-          Built by <b>Horum Labs</b> (Ipiales, Colombia) for the NASA Space Apps Challenge 2026, challenge "Harmonization of
+          Built by <b>Horum Labs</b> (Alexander Morales Ujueta, Tomas Gutierrez Muñoz and Jhoe Luis Jean Paul Miranda Alvarez) for the NASA Space Apps Challenge 2026, Ipiales local event, challenge "Harmonization of
           MODIS and VIIRS Hot Spots". This is an independent project; it is not endorsed by NASA, DANE or IDEAM.
         </p>
         <a className="btn ghost" href={REPO} target="_blank" rel="noopener noreferrer"><Icon name="github" /> Source code and documentation</a>

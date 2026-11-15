@@ -1,8 +1,8 @@
 # Colombia Burn Calendar
 
-**NASA Space Apps Challenge 2026 · Harmonization of MODIS and VIIRS Hot Spots · Team Horum Labs (Ipiales, Colombia)**
+**NASA Space Apps Challenge 2026 · Harmonization of MODIS and VIIRS Hot Spots · Team Horum Labs (NASA Space Apps Ipiales local event)**
 
-A web app that shows when and where Colombia burns, on one harmonized calendar of satellite hot spots from 2003 to today. Pick a department, a municipality or draw an area, choose the dates, and see the daily activity, how it compares with the history of that place, and download the data.
+A web app that shows when and where Colombia burns, on one harmonized calendar of satellite hot spots from January 1, 2003 to November 13, 2026 (the current data snapshot). Pick a department, a municipality or draw an area, choose the dates, and see the daily activity, how it compares with the history of that place, and download the data.
 
 ## The problem, and how this answers it
 
@@ -12,14 +12,14 @@ The challenge asks to harmonize them, so that the sensor of origin no longer mat
 
 This project does that in two steps:
 
-1. **It converts the MODIS years into VIIRS-equivalent units and measures how well that works.** The conversion was tested before it was used, and the app shows it only where the test passed. Where it did not pass, the app says so and starts later.
+1. **It converts the MODIS years into VIIRS-equivalent units and measures how well that works.** The conversion was tested before it was used. The app shows the converted years for every area from 2003, and says clearly, area by area, how far the estimate was tested: where the test failed, could not be run, or was not done at that scale (municipalities and drawn areas), the app shows a warning next to the data.
 2. **It turns the harmonized record into answers a person can use:** which months burn most in a place, which years were worst, whether this week or this month is unusual for that place and season, and the hot spots themselves as a file to download.
 
 It is meant for anyone who needs to read fire activity without processing satellite files themselves. We chose to show the limits of the data next to the data, because a calendar that looks more certain than it is would mislead the people it is meant to help.
 
 ## What it does
 
-- **One calendar from 2003 to today.** From 2012 the values are what VIIRS observed. For 2003-2011, MODIS is converted to VIIRS-equivalent units with one factor per calendar month, adjusted to each department. Those days are estimates and are always hatched and labeled as such.
+- **One calendar from January 1, 2003 to November 13, 2026.** From 2012 the values are what VIIRS observed. For 2003-2011, MODIS is converted to VIIRS-equivalent units with one factor per calendar month, adjusted to each department. Those days are estimates and are always hatched and labeled as such.
 - **Region and dates chosen by the user:** search by name, click the map, draw a polygon or a box, or type coordinates.
 - **Number of hot spots detected** per day, with the 7-day total and the yearly totals.
 - **Historical comparison and anomalies:** each day is compared with the same season in the other years (percentiles 75, 90 and 97.5), and each month with the median of the same month in every other year since 2003 (2003-2011 estimated from MODIS). The current month is compared with the same days of that month in those years. We use the median, not the average, so one extreme year does not hide unusual activity.
@@ -115,7 +115,9 @@ We used AI assistants to build this project, and we want to be exact about how.
 **What the AI did**
 
 - **It wrote the code that carries out those decisions, almost all of it.** Claude Code (Anthropic) wrote the scripts that download, filter and aggregate the data, apply the harmonization rule, run the test and export the files, and it wrote the web application. Codex wrote the script that processes the DANE boundaries. Every AI-assisted file carries a note in its header.
-- **It drew the project logo and favicon.** They are AI-generated: Claude Code drew them in SVG code (a calendar grid with one cell burning). The web app says so on its Data page, and `web/public/favicon.svg` carries the same note. They are not an agency insignia.
+- **Claude Desktop (Anthropic)** searched for sources on the Meta-Caquetá boundary difference and computed descriptive tables from the project data.
+- **The demo video narration is an AI-generated voice** (ElevenLabs), reading a script written in English for the team. The video itself is a screen recording of the real web app, and it says on screen that the narration is AI-generated.
+- **No AI-generated images are used.** The site has no logo: its mark is a simple flame line icon, the same one used across the interface.
 - **It wrote the documentation** from our decisions, and translated our planning documents from Spanish to English.
 - **It ran the analysis we asked for:** the exploration of the raw data, the harmonization test, the comparison with IDEAM and the accessibility checks.
 - **It helped us find what we had not considered.** When we described what we wanted, the AI pointed out gaps and open questions: details our method did not define, cases the data would hit, and places where a number could mislead (for example, comparing a half-finished month with whole months). It raised the points; we decided each one.
@@ -130,4 +132,8 @@ The full record is in [REFERENCES.md](REFERENCES.md), section "AI use".
 
 ## Team
 
-Horum Labs, Ipiales, Colombia. NASA Space Apps Challenge 2026.
+**Horum Labs**, NASA Space Apps Challenge 2026, Ipiales local event.
+
+- Alexander Morales Ujueta
+- Tomas Gutierrez Muñoz
+- Jhoe Luis Jean Paul Miranda Alvarez

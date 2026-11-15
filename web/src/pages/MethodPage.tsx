@@ -65,7 +65,7 @@ function FactorTable({ harm }: { harm: Harmonization }) {
   );
 }
 
-export function MethodPage({ harm }: { harm: Harmonization | null }) {
+export function MethodPage({ harm, dataEnd }: { harm: Harmonization | null; dataEnd: string | null }) {
   const counts = { ok: 0, low_confidence: 0, viirs_only: 0, insufficient: 0 };
   if (harm) for (const d of Object.values(harm.departments)) counts[d.status]++;
   return (
@@ -76,7 +76,7 @@ export function MethodPage({ harm }: { harm: Harmonization | null }) {
         <p>
           MODIS and VIIRS see fire very differently. Adding their detections together would double count fires and make
           recent years look worse just because newer sensors see more. This is how the Horum Labs team harmonized them
-          into one series from 2003 to today, and where that series can and cannot be trusted.
+          into one series from 1 Jan 2003 to {dataEnd ?? 'the latest data'}, and where that series can and cannot be trusted.
         </p>
       </header>
 

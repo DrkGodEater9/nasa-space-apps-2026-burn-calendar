@@ -45,24 +45,11 @@ export function Icon({ name, size = 16, className }: { name: string; size?: numb
   );
 }
 
-/** Project mark: a calendar grid with one cell burning. AI-generated (drawn in SVG code by Claude Code), not an agency logo. */
+/** Project mark: the plain flame icon of the interface's icon set, in the accent color. No logo image is used. */
 export function Logo({ size = 30 }: { size?: number }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 32 32" aria-hidden="true">
-      <defs>
-        <linearGradient id="logo-fire" x1="0" y1="1" x2="0" y2="0">
-          <stop offset="0" stopColor="#e5383b" />
-          <stop offset="0.55" stopColor="#f57a28" />
-          <stop offset="1" stopColor="#f8d348" />
-        </linearGradient>
-      </defs>
-      <rect x="1" y="1" width="30" height="30" rx="8" fill="#141c2b" stroke="#2a3850" />
-      {[0, 1, 2].map((r) =>
-        [0, 1, 2].map((c) => (
-          <rect key={`${r}${c}`} x={6 + c * 7.2} y={6 + r * 7.2} width="5.6" height="5.6" rx="1.4"
-            fill={r === 2 && c === 1 ? 'url(#logo-fire)' : r === 1 && c === 2 ? '#8f2469' : r === 2 && c === 2 ? '#e9622c' : '#26324a'} />
-        )),
-      )}
-    </svg>
+    <span style={{ width: size, height: size, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', color: 'var(--accent)', flex: 'none' }}>
+      <Icon name="flame" size={Math.round(size * 0.8)} />
+    </span>
   );
 }

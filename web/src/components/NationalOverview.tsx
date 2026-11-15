@@ -16,6 +16,8 @@ import { Card, PngButton, Segmented } from './Panels.tsx';
 interface Props {
   geo: GeoIndex;
   day: number;
+  /** Last day of the data snapshot. */
+  dataEnd: number;
   depts: DeptStatus[];
   monthly: MonthStat[];
   /** National hot spots per year of the single calendar (MODIS era estimated, then VIIRS). */
@@ -55,7 +57,7 @@ export const NationalOverview = memo(function NationalOverview(p: Props) {
   return (
     <div className="overview">
       <div className="hero">
-        <div className="eyebrow"><Icon name="flame" size={14} /> Harmonized MODIS + VIIRS hot spots · Colombia 2003 – today</div>
+        <div className="eyebrow"><Icon name="flame" size={14} /> Harmonized MODIS + VIIRS hot spots · Colombia 2003 – {formatDay(p.dataEnd, false)}</div>
         <h1>When and where does Colombia burn?</h1>
         <p>
           A daily calendar of satellite fire activity since 2003 for any municipality, department or area you draw,

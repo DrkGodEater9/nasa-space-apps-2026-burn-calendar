@@ -76,11 +76,11 @@ export default function App() {
           <div className="boot">
             <Logo size={56} />
             <div className="boot-bar"><i /></div>
-            <p>Loading 15 years of satellite fire data…</p>
+            <p>Loading satellite fire data since 2003…</p>
           </div>
         )}
         {boot && route.page === 'explore' && <ExplorePage boot={boot} params={route.params} onParams={replaceParams} />}
-        {route.page === 'method' && <MethodPage harm={boot?.manifest.harmonization ?? null} />}
+        {route.page === 'method' && <MethodPage harm={boot?.manifest.harmonization ?? null} dataEnd={boot ? formatDay(boot.ctx.refEnd, false) : null} />}
         {route.page === 'data' && <DataPage />}
       </main>
 
