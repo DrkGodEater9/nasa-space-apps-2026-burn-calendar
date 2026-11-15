@@ -34,15 +34,21 @@ API_URL = "https://firms.modaps.eosdis.nasa.gov/api/area/csv/{key}/{source}/{bbo
 MAX_DAYS = 5  # the API accepts 1-5 days per request
 ENV_VAR = "FIRMS_MAP_KEY"
 
-# Colombia, approximate box: west, south, east, north (from PLAN.md)
+# Colombia, approximate box: west, south, east, north
 COLOMBIA_BBOX = (-79.5, -4.5, -66.5, 12.8)
 
-# First day each archive source has data (from PLAN.md)
+# First day each archive source has data (FIRMS archive coverage)
 SOURCE_START = {
     "MODIS_SP": date(2000, 11, 1),
     "VIIRS_SNPP_SP": date(2012, 1, 20),
     "VIIRS_NOAA20_SP": date(2018, 4, 1),
     "VIIRS_NOAA21_SP": date(2023, 3, 1),
+    # Near-real-time sources: use these for the most recent days that the archive does not cover yet.
+    # The API only serves recent days for them; older requests return nothing or an error.
+    "MODIS_NRT": date(2000, 11, 1),
+    "VIIRS_SNPP_NRT": date(2012, 1, 20),
+    "VIIRS_NOAA20_NRT": date(2018, 4, 1),
+    "VIIRS_NOAA21_NRT": date(2023, 3, 1),
 }
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
