@@ -1,7 +1,7 @@
 // Note: Implementation assisted by AI (Claude Code) following Horum Labs' methodology.
 // Landing view before an area is chosen: how Colombia looks on the selected day.
 
-import { useMemo, useState } from 'react';
+import { memo, useMemo, useState } from 'react';
 import type { DeptStatus, MonthStat, YearTotal } from '../lib/analysis.ts';
 import type { Harmonization } from '../lib/types.ts';
 import { levelInfo, levelRank } from '../lib/colors.ts';
@@ -35,7 +35,7 @@ const SUGGESTIONS = [
   { kind: 'd', code: '52', label: 'Nariño', why: 'Andes, volcano masked' },
 ];
 
-export function NationalOverview(p: Props) {
+export const NationalOverview = memo(function NationalOverview(p: Props) {
   const [showAll, setShowAll] = useState(false);
   const ranked = useMemo(
     () => [...p.depts].sort((a, b) => levelRank(b.level) - levelRank(a.level) || b.cells7 - a.cells7),
@@ -43,8 +43,9 @@ export function NationalOverview(p: Props) {
   );
   const total = p.depts.reduce((s, d) => s + d.cells7, 0);
   const max = Math.max(1, ...p.depts.map((d) => d.cells7));
-  const lastComplete = [...p.monthly].reverse().find((r) => r.ok);
-  const last36 = p.monthly.slice(-36);
+  const lastComplete = useMemo(() => [...p.monthly].reverse().find((r) => r.ok), [p.monthly]);
+  // Memoized so the (memoized) chart does not redraw when only the selected day changes.
+  const last36 = useMemo(() => p.monthly.slice(-36), [p.monthly]);
   const list = showAll ? ranked : ranked.slice(0, 10);
 
   return (
@@ -117,7 +118,7 @@ export function NationalOverview(p: Props) {
       )}
     </div>
   );
-}
+});
 
 function formatMonthName(r: MonthStat) {
   return new Date(Date.UTC(r.y, r.m, 1)).toLocaleString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' });

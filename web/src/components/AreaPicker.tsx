@@ -1,7 +1,7 @@
 // Note: Implementation assisted by AI (Claude Code) following Horum Labs' methodology.
 // Area selection without the map: search by name, or type coordinates (point or bounding box).
 
-import { useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
+import { memo, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
 import type { GeoIndex } from '../lib/geo.ts';
 import type { Area } from '../lib/types.ts';
 import { Icon } from './Icon.tsx';
@@ -24,7 +24,7 @@ interface Hit {
 
 const norm = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 
-export function AreaPicker({ geo, onDepartment, onMunicipality, onPoint, onBox, compact }: Props) {
+export const AreaPicker = memo(function AreaPicker({ geo, onDepartment, onMunicipality, onPoint, onBox, compact }: Props) {
   const [q, setQ] = useState('');
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(0);
@@ -117,7 +117,7 @@ export function AreaPicker({ geo, onDepartment, onMunicipality, onPoint, onBox, 
       {coordMode === 'box' && <BoxForm onBox={onBox} />}
     </div>
   );
-}
+});
 
 function num(v: string): number {
   return Number(v.trim().replace(',', '.'));
@@ -174,7 +174,7 @@ function BoxForm({ onBox }: { onBox: Props['onBox'] }) {
   );
 }
 
-export function AreaMembers({ area }: { area: Area }) {
+export const AreaMembers = memo(function AreaMembers({ area }: { area: Area }) {
   const [showAll, setShowAll] = useState(false);
   if (area.kind === 'department' || area.members.length <= 1) return null;
   const list = showAll ? area.members : area.members.slice(0, 8);
@@ -205,4 +205,4 @@ export function AreaMembers({ area }: { area: Area }) {
       )}
     </div>
   );
-}
+});

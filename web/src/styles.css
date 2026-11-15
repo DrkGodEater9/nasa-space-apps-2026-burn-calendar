@@ -69,8 +69,12 @@ h1, h2, h3, h4 { font-family: var(--display); letter-spacing: -0.01em; margin: 0
 .nav a.on { background: var(--text); color: #0b0f17; }
 .live { justify-self: end; display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--text-2); }
 .live b { color: var(--text); font-weight: 600; }
-.live-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 0 rgba(255, 122, 26, 0.6); animation: pulse 2.2s infinite; }
-@keyframes pulse { 70% { box-shadow: 0 0 0 9px rgba(255, 122, 26, 0); } 100% { box-shadow: 0 0 0 0 rgba(255, 122, 26, 0); } }
+/* The pulse ring is a pseudo-element animated with transform and opacity only, which the GPU
+   compositor handles without repainting. An animated box-shadow repainted the header on every
+   frame (about 16% of a CPU core while the page sat idle). Same look: 9px ring that fades out. */
+.live-dot { position: relative; flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+.live-dot::after { content: ''; position: absolute; inset: 0; border-radius: 50%; background: rgba(255, 122, 26, 0.6); animation: pulse 2.2s infinite; will-change: transform, opacity; }
+@keyframes pulse { 0% { transform: scale(1); opacity: 1; } 70%, 100% { transform: scale(3.25); opacity: 0; } }
 
 .notice {
   min-height: var(--notice);
@@ -247,8 +251,10 @@ a.chip:hover { text-decoration: none; }
 .spinner { width: 26px; height: 26px; border: 2.5px solid var(--line-2); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 .skeleton-cal { width: 100%; display: grid; gap: 10px; margin-top: 6px; }
-.skeleton-cal div { height: 70px; border-radius: 10px; background: linear-gradient(90deg, var(--panel-2), #1a2436, var(--panel-2)); background-size: 200% 100%; animation: shimmer 1.4s infinite; }
-@keyframes shimmer { to { background-position: -200% 0; } }
+/* Shimmer moved with transform (compositor only) instead of background-position (a repaint per frame). */
+.skeleton-cal div { position: relative; overflow: hidden; height: 70px; border-radius: 10px; background: var(--panel-2); }
+.skeleton-cal div::after { content: ''; position: absolute; inset: 0; background: linear-gradient(90deg, transparent, #1a2436, transparent); animation: shimmer 1.4s infinite; will-change: transform; }
+@keyframes shimmer { from { transform: translateX(-100%); } to { transform: translateX(100%); } }
 
 /* ---------------------------------------------------------------- overview */
 .hero { padding: 6px 2px 4px; }
@@ -278,7 +284,6 @@ a.chip:hover { text-decoration: none; }
 .dr-bar i { display: block; height: 100%; background: #3d5f8f; border-radius: 3px; }
 .dr-val { font-family: var(--mono); font-size: 12.5px; text-align: right; color: var(--text-2); }
 .dept-rank .level-pill { justify-self: end; }
-.spark-readout { font-size: 11.5px; color: var(--muted); margin-top: 6px; }
 
 /* ---------------------------------------------------------------- search & picker */
 .picker { display: grid; gap: 9px; }
@@ -380,7 +385,6 @@ a.chip:hover { text-decoration: none; }
 .bar.hover { fill: #8fb4e8; }
 .bar.hot.hover { fill: #ffb26b; }
 .median-line { fill: none; stroke: #eef3fb; stroke-width: 1.4; stroke-dasharray: 3 2.5; opacity: 0.85; }
-.median-tick { stroke: #eef3fb; stroke-width: 1.4; opacity: 0.85; }
 .chart-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; margin-top: 8px; }
 .chart-readout { margin-left: auto; font-size: 12px; color: var(--text-2); }
 .chart-readout b { color: var(--accent-2); }
@@ -518,6 +522,9 @@ a.chip:hover { text-decoration: none; }
 }
 @media (max-width: 720px) {
   :root { --topbar: 104px; }
+  /* Button groups may wrap on phones: in one line they were 7px wider than a 390px screen and
+     made the whole page scroll sideways. */
+  .segmented { flex-wrap: wrap; max-width: 100%; }
   .topbar { grid-template-columns: 1fr; height: auto; padding: 10px 16px; gap: 8px; }
   .nav { justify-self: start; }
   .notice { justify-content: flex-start; padding: 7px 16px; font-size: 12px; }

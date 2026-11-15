@@ -9,6 +9,17 @@
     <meta property="og:title" content="Colombia Burn Calendar" />
     <meta property="og:description" content="When and where does Colombia burn? Harmonized MODIS + VIIRS hot spots, 2003 to today." />
     <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+    <!-- Start the start-up data downloads right away, in parallel with the JavaScript, instead of
+         after the app has loaded and parsed. as="fetch" + crossorigin="anonymous" matches the app's
+         fetch() calls, so the browser reuses these responses instead of downloading twice. -->
+    <link rel="preload" href="./data/web/departments.json" as="fetch" crossorigin="anonymous" />
+    <link rel="preload" href="./data/geo/municipalities.json" as="fetch" crossorigin="anonymous" />
+    <link rel="preload" href="./data/geo/departments.json" as="fetch" crossorigin="anonymous" />
+    <link rel="preload" href="./data/web/status.json" as="fetch" crossorigin="anonymous" />
+    <link rel="preload" href="./data/web/manifest.json" as="fetch" crossorigin="anonymous" />
+    <!-- Basemap servers (style and tiles): open the connections early. -->
+    <link rel="preconnect" href="https://basemaps.cartocdn.com" crossorigin />
+    <link rel="preconnect" href="https://tiles.basemaps.cartocdn.com" crossorigin />
     <title>Colombia Burn Calendar</title>
   </head>
   <body>

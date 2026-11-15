@@ -127,10 +127,11 @@ function ActivityCalendarImpl(p: Props) {
         } else {
           fill = cellColor(v, bins);
         }
-        push(fills, fill, roundRect(x, yy, CELL, CELL, 2));
+        const cellPath = roundRect(x, yy, CELL, CELL, 2);
+        push(fills, fill, cellPath);
         if (isEra) {
           estDays++;
-          estimates.push(roundRect(x, yy, CELL, CELL, 2));
+          estimates.push(cellPath);
         }
         if (sensor === 'ref' && st === STATUS_N20) dots.push(circle(x + CELL - 2.6, yy + 2.6, 1.6));
         if (sensor === 'ref' && !isEra && p.markUnusual && p.colorMode === 'cells') {

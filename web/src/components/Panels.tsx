@@ -1,7 +1,7 @@
 // Note: Implementation assisted by AI (Claude Code) following Horum Labs' methodology.
 // Smaller panels of the explorer: date controls, KPI strip, unusual episodes, data quality.
 
-import { useState, type ReactNode } from 'react';
+import { memo, useState, type ReactNode } from 'react';
 import type { AreaSeries, Episode, RangeSummary, RefContext } from '../lib/analysis.ts';
 import type { Area, ColorMode, Sensor } from '../lib/types.ts';
 import { LEVELS, levelInfo } from '../lib/colors.ts';
@@ -180,7 +180,7 @@ export function RangeControls({ from, to, minDay, maxDay, onChange, sensor, onSe
 
 // ------------------------------------------------------------------ KPIs
 
-export function Kpis({ s, sensorLabel, showLevels = true }: { s: RangeSummary; sensorLabel: string; showLevels?: boolean }) {
+export const Kpis = memo(function Kpis({ s, sensorLabel, showLevels = true }: { s: RangeSummary; sensorLabel: string; showLevels?: boolean }) {
   const hot = s.levelDays[2] + s.levelDays[3];
   const last = levelInfo(s.lastLevel);
   return (
@@ -212,11 +212,11 @@ export function Kpis({ s, sensorLabel, showLevels = true }: { s: RangeSummary; s
       </div>}
     </div>
   );
-}
+});
 
 // ------------------------------------------------------------------ episodes
 
-export function Episodes({ episodes, onFocus }: { episodes: Episode[]; onFocus: (d: number) => void }) {
+export const Episodes = memo(function Episodes({ episodes, onFocus }: { episodes: Episode[]; onFocus: (d: number) => void }) {
   const [all, setAll] = useState(false);
   if (!episodes.length) {
     return <div className="empty-note"><Icon name="check" /> No unusual or extreme 7-day windows in this range.</div>;
@@ -248,11 +248,11 @@ export function Episodes({ episodes, onFocus }: { episodes: Episode[]; onFocus: 
       {episodes.length > 6 && <button className="link-btn" onClick={() => setAll(!all)}>{all ? 'Show fewer' : `Show all ${episodes.length} episodes`}</button>}
     </>
   );
-}
+});
 
 // ------------------------------------------------------------------ data quality
 
-export function DataQuality({ area, series, summary, ctx, from, to }: {
+export const DataQuality = memo(function DataQuality({ area, series, summary, ctx, from, to }: {
   area: Area; series: AreaSeries; summary: RangeSummary; ctx: RefContext; from: number; to: number;
 }) {
   const insufficient = series.insufficientMembers.map((k) => area.members[k]?.name).filter(Boolean);
@@ -314,7 +314,7 @@ export function DataQuality({ area, series, summary, ctx, from, to }: {
       ))}
     </ul>
   );
-}
+});
 
 export function LevelScale() {
   return (

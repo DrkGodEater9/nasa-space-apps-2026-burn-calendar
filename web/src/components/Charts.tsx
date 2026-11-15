@@ -1,7 +1,7 @@
 // Note: Implementation assisted by AI (Claude Code) following Horum Labs' methodology.
 // Monthly comparison with the historical median, seasonality matrix, and yearly totals.
 
-import { useMemo, useState } from 'react';
+import { memo, useMemo, useState } from 'react';
 import type { MonthStat, YearTotal } from '../lib/analysis.ts';
 import { CELL_ZERO, binLabels, cellColor, makeBins, percentile } from '../lib/colors.ts';
 import { MONTHS_LONG, MONTHS_SHORT, formatMonth } from '../lib/dates.ts';
@@ -18,7 +18,7 @@ function niceMax(v: number): number {
 
 // ------------------------------------------------------------------ month vs median
 
-export function MonthlyChart({ rows, onPick }: { rows: MonthStat[]; onPick?: (mo: number) => void }) {
+export const MonthlyChart = memo(function MonthlyChart({ rows, onPick }: { rows: MonthStat[]; onPick?: (mo: number) => void }) {
   const [hover, setHover] = useState<number | null>(null);
   const W = 760;
   const H = 210;
@@ -94,9 +94,9 @@ export function MonthlyChart({ rows, onPick }: { rows: MonthStat[]; onPick?: (mo
       </div>
     </div>
   );
-}
+});
 
-export function MonthHeadline({ row, partial }: { row: MonthStat | null; partial: MonthStat | null }) {
+export const MonthHeadline = memo(function MonthHeadline({ row, partial }: { row: MonthStat | null; partial: MonthStat | null }) {
   if (!row) return null;
   const ratio = row.ratio;
   const cls = row.pct === null ? '' : row.pct >= 90 ? 'hot' : row.pct >= 75 ? 'warm' : row.pct <= 25 ? 'cool' : '';
@@ -120,11 +120,11 @@ export function MonthHeadline({ row, partial }: { row: MonthStat | null; partial
       </div>
     </div>
   );
-}
+});
 
 // ------------------------------------------------------------------ seasonality
 
-export function SeasonalityMatrix({ rows }: { rows: MonthStat[] }) {
+export const SeasonalityMatrix = memo(function SeasonalityMatrix({ rows }: { rows: MonthStat[] }) {
   const [hover, setHover] = useState<MonthStat | null>(null);
   const years = useMemo(() => [...new Set(rows.map((r) => r.y))].sort((a, b) => b - a), [rows]);
   const bins = useMemo(() => {
@@ -208,9 +208,9 @@ export function SeasonalityMatrix({ rows }: { rows: MonthStat[] }) {
       </div>
     </div>
   );
-}
+});
 
-export function YearBars({ totals, accent = false, note }: { totals: YearTotal[]; accent?: boolean; note?: string }) {
+export const YearBars = memo(function YearBars({ totals, accent = false, note }: { totals: YearTotal[]; accent?: boolean; note?: string }) {
   const sorted = [...totals].sort((a, b) => b.y - a.y);
   const max = Math.max(1, ...totals.map((t) => t.cd));
   // The busiest year is taken among observed years only: an estimated year never gets that mark.
@@ -233,9 +233,9 @@ export function YearBars({ totals, accent = false, note }: { totals: YearTotal[]
       {note && <div className="yb-note">{note}</div>}
     </div>
   );
-}
+});
 
-export function TopMonths({ rows, n = 5 }: { rows: MonthStat[]; n?: number }) {
+export const TopMonths = memo(function TopMonths({ rows, n = 5 }: { rows: MonthStat[]; n?: number }) {
   const top = [...rows].filter((r) => r.cd > 0).sort((a, b) => b.cd - a.cd).slice(0, n);
   if (!top.length) return null;
   return (
@@ -250,42 +250,4 @@ export function TopMonths({ rows, n = 5 }: { rows: MonthStat[]; n?: number }) {
       ))}
     </ol>
   );
-}
-
-/** Tiny inline bar chart used in the national overview. */
-export function Sparkbars({ rows }: { rows: MonthStat[] }) {
-  const W = 360;
-  const H = 70;
-  const max = Math.max(1, ...rows.map((r) => Math.max(r.cd, r.med ?? 0)));
-  const bw = W / rows.length;
-  const [hover, setHover] = useState<MonthStat | null>(null);
-  return (
-    <div>
-      <svg viewBox={`0 0 ${W} ${H}`} width="100%" role="img" aria-label="National monthly hot spots, last months" onMouseLeave={() => setHover(null)}>
-        {rows.map((r, i) => {
-          const h = (r.cd / max) * (H - 6);
-          const mh = r.med === null ? null : H - (r.med / max) * (H - 6);
-          return (
-            <g key={r.mo} onMouseEnter={() => setHover(r)}>
-              <rect x={i * bw} y={0} width={bw} height={H} fill="transparent" />
-              <rect x={i * bw + 1} y={H - h} width={Math.max(1, bw - 2)} height={h} rx={1.5}
-                className={`bar ${(r.pct ?? 0) >= HOT_PCT ? 'hot' : ''} ${hover === r ? 'hover' : ''} ${r.ok ? '' : 'partial'}`} />
-              {mh !== null && <line x1={i * bw + 1} x2={i * bw + bw - 1} y1={mh} y2={mh} className="median-tick" />}
-            </g>
-          );
-        })}
-      </svg>
-      <div className="spark-readout">
-        {hover ? (
-          <>
-            <strong>{formatMonth(hover.mo)}</strong> · {fmtInt(hover.cd)} hot spots
-            {hover.ratio !== null && <> · {fmtRatio(hover.ratio)} the median</>}
-            {!hover.ok && ' · partial'}
-          </>
-        ) : (
-          <>Bars: national hot spots per month · ticks: median of the same month</>
-        )}
-      </div>
-    </div>
-  );
-}
+});

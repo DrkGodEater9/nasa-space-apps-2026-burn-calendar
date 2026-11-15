@@ -6,5 +6,19 @@ import react from '@vitejs/plugin-react';
 export default defineConfig({
   base: './',
   plugins: [react()],
-  build: { chunkSizeWarningLimit: 1500 },
+  build: {
+    chunkSizeWarningLimit: 1500,
+    rolldownOptions: {
+      output: {
+        // Libraries in their own files: they rarely change, so browsers keep them cached across
+        // deploys of the app code, and the three files download in parallel.
+        codeSplitting: {
+          groups: [
+            { name: 'maplibre', test: /node_modules[\\/]maplibre-gl[\\/]/ },
+            { name: 'react', test: /node_modules[\\/](react|react-dom|scheduler)[\\/]/ },
+          ],
+        },
+      },
+    },
+  },
 });

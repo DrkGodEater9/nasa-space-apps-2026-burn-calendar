@@ -2,13 +2,14 @@
 // Interactive map: pick a department or municipality, draw a polygon or rectangle, and see
 // the 7-day activity level of the selected day. Optional NASA GIBS true-color imagery.
 
-import { useEffect, useRef, useState } from 'react';
+import { memo, useEffect, useRef, useState } from 'react';
 import * as maplibregl from 'maplibre-gl';
 import type { GeoJSONSource, MapMouseEvent, RasterTileSource } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import type { Area, MapTool } from '../lib/types.ts';
 import type { GeoIndex } from '../lib/geo.ts';
 import { areaBounds, ringToPolygon } from '../lib/geo.ts';
+import { GEO_FILES, dataUrl } from '../lib/data.ts';
 import type { DeptStatus } from '../lib/analysis.ts';
 import { LEVELS, levelInfo } from '../lib/colors.ts';
 import { gibsTiles, type ImageryLayer } from '../lib/imagery.ts';
@@ -61,7 +62,8 @@ interface Props {
   onClear: () => void;
 }
 
-export function MapView(props: Props) {
+// Memoized: the explorer re-renders often (selected day, menus, toasts); the map only needs to when its props change.
+export const MapView = memo(function MapView(props: Props) {
   const container = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const [ready, setReady] = useState(false);
@@ -101,7 +103,6 @@ export function MapView(props: Props) {
 
     map.on('load', () => {
       const firstSymbol = map.getStyle().layers.find((l) => l.type === 'symbol')?.id;
-      const { geo } = live.current;
 
       map.addSource('gibs', {
         type: 'raster',
@@ -110,8 +111,13 @@ export function MapView(props: Props) {
         maxzoom: 9,
         attribution: 'Imagery: <a href="https://earthdata.nasa.gov/gibs" target="_blank" rel="noopener">NASA GIBS</a>',
       });
-      map.addSource('departments', { type: 'geojson', data: geo.departments, promoteId: 'DPTO_CCDGO' });
-      map.addSource('municipalities', { type: 'geojson', data: geo.municipalities, promoteId: 'MPIO_CDPMP' });
+      // The boundaries are given to MapLibre as URLs, not as objects: its worker fetches them (from the
+      // HTTP cache, the app already downloaded them) and parses them off the main thread. Passing the
+      // objects made the main thread copy about 2 MB of geometry into the worker at start-up.
+      // The worker resolves relative URLs against its own script, so the URL must be absolute.
+      const abs = (path: string) => new URL(dataUrl(path), window.location.href).href;
+      map.addSource('departments', { type: 'geojson', data: abs(GEO_FILES.departments), promoteId: 'DPTO_CCDGO' });
+      map.addSource('municipalities', { type: 'geojson', data: abs(GEO_FILES.municipalities), promoteId: 'MPIO_CDPMP' });
       map.addSource('shape', { type: 'geojson', data: EMPTY });
       map.addSource('draw', { type: 'geojson', data: EMPTY });
 
@@ -414,11 +420,11 @@ export function MapView(props: Props) {
           ) : (
             <div className="tip-row">
               <span className="dot" style={{ background: levelInfo(hover.level).color }} />
-              {levelInfo(hover.level).label} · {fmtInt(hover.cells7)} cells in 7 days
+              {levelInfo(hover.level).label} · {fmtInt(hover.cells7)} hot spots in 7 days
             </div>
           )}
         </div>
       )}
     </div>
   );
-}
+});

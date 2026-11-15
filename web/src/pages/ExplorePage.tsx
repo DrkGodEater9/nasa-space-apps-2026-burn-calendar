@@ -201,11 +201,13 @@ export function ExplorePage({ boot, params, onParams }: Props) {
   }, [minDay, refEnd]);
   const years = dayParts(to).y - dayParts(viewFrom).y + 1;
 
-  const clearArea = () => {
+  const clearArea = useCallback(() => {
     setArea(null);
     setTool('select');
     setFocusDay(refEnd);
-  };
+  }, [refEnd]);
+  const toggleImagery = useCallback(() => setImageryOn((on) => !on), []);
+  const startPolygon = useCallback(() => setTool('polygon'), []);
 
   const [pointsBusy, setPointsBusy] = useState(false);
   const downloadPoints = async () => {
@@ -232,7 +234,7 @@ export function ExplorePage({ boot, params, onParams }: Props) {
     }
   };
 
-  const bounds = (area && areaBounds(geo, area)) || COLOMBIA_BOUNDS;
+  const bounds = useMemo(() => (area && areaBounds(geo, area)) || COLOMBIA_BOUNDS, [geo, area]);
   const memberNames = useMemo(() => area?.members.map((m) => m.name) ?? [], [area]);
   const sensorLabel = sensor === 'ref' ? (hasEra && viewFrom < refStart ? 'MODIS rescaled + VIIRS' : 'VIIRS reference') : sensor === 'modis' ? 'MODIS C6.1, raw' : 'NOAA-21, info';
 
@@ -251,7 +253,7 @@ export function ExplorePage({ boot, params, onParams }: Props) {
             onMunicipality={onMunicipality}
             onPoint={onPoint}
             onBox={onBox}
-            onDrawTool={() => setTool('polygon')}
+            onDrawTool={startPolygon}
           />
         )}
 
@@ -413,7 +415,7 @@ export function ExplorePage({ boot, params, onParams }: Props) {
           loadedDepts={loadedDepts}
           imageryOn={imageryOn}
           imagery={imagery}
-          onImageryToggle={() => setImageryOn(!imageryOn)}
+          onImageryToggle={toggleImagery}
           onSelectMunicipality={onMunicipality}
           onSelectDepartment={onDepartment}
           onShape={onShape}
@@ -430,7 +432,7 @@ export function ExplorePage({ boot, params, onParams }: Props) {
           imagery={imagery}
           imageryOn={imageryOn}
           onDay={setFocusDay}
-          onImageryToggle={() => setImageryOn(!imageryOn)}
+          onImageryToggle={toggleImagery}
         />
       </div>
 

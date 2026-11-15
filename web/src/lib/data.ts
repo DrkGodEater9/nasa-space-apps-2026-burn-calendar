@@ -33,13 +33,16 @@ export interface BootData {
   geo: GeoIndex;
 }
 
+/** Boundary files, shared by the area index (here) and the map sources (MapView). */
+export const GEO_FILES = { municipalities: 'geo/municipalities.json', departments: 'geo/departments.json' } as const;
+
 export async function loadBoot(): Promise<BootData> {
   const [manifest, status, national, municipalities, departments] = await Promise.all([
     loadJson<Manifest>('web/manifest.json'),
     loadJson<StatusFile>('web/status.json'),
     loadJson<NationalFile>('web/departments.json'),
-    loadJson<GeoJSON.FeatureCollection>('geo/municipalities.json'),
-    loadJson<GeoJSON.FeatureCollection>('geo/departments.json'),
+    loadJson<GeoJSON.FeatureCollection>(GEO_FILES.municipalities),
+    loadJson<GeoJSON.FeatureCollection>(GEO_FILES.departments),
   ]);
   if (manifest.day_base !== '2003-01-01' || manifest.month_base !== '2012-01') {
     throw new Error('Unexpected date bases in manifest.json; the web app expects 2003-01-01 and 2012-01.');
