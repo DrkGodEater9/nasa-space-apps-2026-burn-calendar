@@ -39,7 +39,7 @@ NOTICE = ("Hot spot = thermal anomaly detected by satellite, not a confirmed fir
           "a zero does not guarantee absence of fire. Data from different satellites are never summed on the same day.")
 # Fixed notice of the harmonization, written by the team (translated to English).
 HARMONIZATION_NOTICE = (
-    "MODIS data (2003-2011) are converted to VIIRS-equivalent units with a different factor for each month, estimated "
+    "MODIS data (2003-2011) are converted to VIIRS-equivalent units with a different factor for each month and department, estimated "
     "from the years when both sensors overlap (2013-2025). They are estimates, not observations. The error can be larger "
     "in regions and months with few detections. The assumption that the factor also holds in 2003-2011 cannot be "
     "verified. Data from different satellites are never summed on the same day.")
@@ -124,7 +124,7 @@ def main() -> None:
     dump({"departments": depts.rename(columns={"dpto_code": "code", "dpto_name": "name"}).to_dict("records"),
           "alerts": alert_columns(an_d, an_d["i"]), "monthly": monthly_columns(mo_d, mo_d["i"]),
           # Internal anomalies of the MODIS era (2003-2011), on MODIS rescaled to VIIRS units. Only for the
-          # departments that passed the harmonization test. Never compared with the VIIRS-era alerts.
+          # departments with MODIS data (all of them since November 15, 2026). Never compared with the VIIRS-era alerts.
           "alerts_modis_era": alert_columns(an_e, an_e["dpto_code"].map(dept_idx)) if an_e is not None else None},
          OUT / "departments.json")
 

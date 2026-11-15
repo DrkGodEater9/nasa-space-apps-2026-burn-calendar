@@ -15,7 +15,7 @@ const ctx = makeRefContext(manifest.reference_range, load<StatusFile>('status.js
 const national = indexNational(load<NationalFile>('departments.json'));
 
 let failures = 0;
-const check = (label: string, ok: boolean) => { if (!ok) { failures++; if (failures < 25) console.log('MISMATCH', label); } };
+const check = (label: string, ok: boolean) => { if (!ok) { failures++; if (failures < 25 || process.env.ALL) console.log('MISMATCH', label); } };
 const close = (a: number | null, b: number | null, tol: number) =>
   (a === null && b === null) || (a !== null && b !== null && Math.abs(a - b) <= tol);
 
@@ -40,8 +40,10 @@ for (const code of ['52', '50', '99', '11']) {
       check(`${u.code} mo${mb.mo[r]} ad`, row?.ad === mb.ad[r]);
       check(`${u.code} mo${mb.mo[r]} nd`, row?.nd === mb.nd[r]);
       check(`${u.code} mo${mb.mo[r]} ok`, row?.ok === (mb.ok[r] === 1));
-      check(`${u.code} mo${mb.mo[r]} med ${row?.med} vs ${mb.med[r]}`, close(row?.med ?? null, mb.med[r], 1e-6));
-      check(`${u.code} mo${mb.mo[r]} pct ${row?.pct} vs ${mb.pct[r]}`, close(row?.pct ?? null, mb.pct[r], 0.051));
+      // med and pct are rounded to 2 decimals by the pipeline and to 1 decimal in the web JSON, so the stored
+      // value can differ by up to 0.055. Medians include MODIS-era estimates (decimals) since November 15, 2026.
+      check(`${u.code} mo${mb.mo[r]} med ${row?.med} vs ${mb.med[r]}`, close(row?.med ?? null, mb.med[r], 0.06));
+      check(`${u.code} mo${mb.mo[r]} pct ${row?.pct} vs ${mb.pct[r]}`, close(row?.pct ?? null, mb.pct[r], 0.06));
       check(`${u.code} mo${mb.mo[r]} ratio ${row?.ratio} vs ${mb.ratio[r]}`, close(row?.ratio ?? null, mb.ratio[r], 0.0051)); // stored rounded to 2 decimals
     }
   }
@@ -56,8 +58,8 @@ for (const code of ['52', '50', '99', '11']) {
     const row = s.monthly[nm.mo[r]];
     deptRows++;
     check(`dept ${code} mo${nm.mo[r]} cd ${row.cd} vs ${nm.cd[r]}`, row.cd === nm.cd[r]);
-    check(`dept ${code} mo${nm.mo[r]} med ${row.med} vs ${nm.med[r]}`, close(row.med, nm.med[r], 1e-6));
-    check(`dept ${code} mo${nm.mo[r]} pct ${row.pct} vs ${nm.pct[r]}`, close(row.pct, nm.pct[r], 0.051));
+    check(`dept ${code} mo${nm.mo[r]} med ${row.med} vs ${nm.med[r]}`, close(row.med, nm.med[r], 0.06));
+    check(`dept ${code} mo${nm.mo[r]} pct ${row.pct} vs ${nm.pct[r]}`, close(row.pct, nm.pct[r], 0.06));
   }
   // 7-day sums vs the alert rows.
   const a = dep.file.alerts;
@@ -69,17 +71,30 @@ for (const code of ['52', '50', '99', '11']) {
     const ss = computeAreaSeries(single, depts, national, ctx);
     check(`c7 ${u.code} d${a.d[r]} ${ss.cells7[a.d[r] - ctx.refStart]} vs ${a.c[r]}`, ss.cells7[a.d[r] - ctx.refStart] === a.c[r]);
   }
-  // Single calendar: the MODIS era is shown only where the harmonization test passed (department scale).
+  // Single calendar: since November 15, 2026 every area shows the MODIS era (HARMONIZATION.md Part 5),
+  // with the reason that drives its warning.
   let eraRows = 0;
   const harm = manifest.harmonization;
   if (harm?.accepted) {
     const status = harm.departments[code]?.status;
-    const expectShown = status === 'ok' || status === 'low_confidence';
-    check(`dept ${code} era shown=${!!s.era} but status=${status}`, !!s.era === expectShown);
+    const expectReason = status === 'ok' || status === 'low_confidence' ? 'shown' : status === 'viirs_only' ? 'department_failed' : 'insufficient';
+    check(`dept ${code} era shown=${!!s.era}, reason ${s.eraReason} vs ${expectReason}`, !!s.era && s.eraReason === expectReason);
     const first = dep.file.municipalities[0];
     const muni = computeAreaSeries({ kind: 'municipality', key: '', label: '', sublabel: '', dptoCodes: [code],
       members: [{ mpio: first.code, dpto: code, name: first.name, dptoName: '', coverage: 1 }] }, depts, national, ctx);
-    check(`municipality ${first.code} must never be rescaled`, muni.era === null && muni.eraReason === 'scale_not_tested');
+    check(`municipality ${first.code} shows the era with the not-tested warning`, !!muni.era && muni.eraReason === 'scale_not_tested'
+      && muni.era.status === 'not_tested' && muni.era.factorLevel === (harm.departments[code]?.level ?? 1));
+    // The department era is the sum of its municipalities' eras.
+    if (s.era) {
+      let sumM = 0; let sumD = 0;
+      for (const u of dep.file.municipalities) {
+        const one = computeAreaSeries({ kind: 'municipality', key: '', label: '', sublabel: '', dptoCodes: [code],
+          members: [{ mpio: u.code, dpto: code, name: u.name, dptoName: '', coverage: 1 }] }, depts, national, ctx);
+        for (let d = 0; d < ctx.refStart; d += 97) sumM += one.era ? one.era.est[d] : 0;
+      }
+      for (let d = 0; d < ctx.refStart; d += 97) sumD += s.era.est[d];
+      check(`dept ${code} era = sum of municipalities (${sumD} vs ${sumM})`, Math.abs(sumD - sumM) < 1e-6 * Math.max(1, sumD));
+    }
     const ea = national.file.alerts_modis_era;
     if (s.era && ea && national.eraRows) {
       // The 7-day totals of the rescaled series match the pipeline (stored rounded to 1 decimal).

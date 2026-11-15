@@ -101,8 +101,24 @@ def main() -> None:
             b = pd.Timestamp(y, last_month.month, int(r0["compare_last_day"]))
             if a >= first_ref:
                 sums.append(int(rd.loc[rd["dt"].between(a, b), "detections"].sum()))
+        n_viirs = len(sums)
+        # Since November 15, 2026 the history also has the same days of 2003-2011, MODIS rescaled (HARMONIZATION.md Part 5)
+        hfile0 = P / "harmonization.json"
+        if hfile0.exists():
+            import json as _j0
+            h0 = _j0.loads(hfile0.read_text(encoding="utf-8"))
+            if h0["accepted"]:
+                md = daily[(daily["mpio_code"] == "99773") & (daily["sensor"] == "MODIS_C61")].assign(dt=lambda x: pd.to_datetime(x["date"]))
+                era_end = pd.Timestamp(h0["modis_era"][1])
+                lvl = h0["departments"]["99"].get("level", 1.0)
+                for y in range(2003, last_month.year):
+                    a = pd.Timestamp(y, last_month.month, int(r0["compare_first_day"]))
+                    b = pd.Timestamp(y, last_month.month, int(r0["compare_last_day"]))
+                    if b <= era_end:
+                        sums.append(float(md.loc[md["dt"].between(a, b), "detections"].sum()) * h0["factors"][last_month.month - 1] * lvl)
         check(abs(float(np.median(sums)) - float(r0["hist_median_hotspots"])) < 0.01 and len(sums) == int(r0["history_years"]),
-              f"current partial month (Cumaribo, days {r0['compare_first_day']}-{r0['compare_last_day']}) uses the same days in {len(sums)} other years")
+              f"current partial month (Cumaribo, days {r0['compare_first_day']}-{r0['compare_last_day']}) uses the same days in "
+              f"{len(sums)} other years ({n_viirs} VIIRS, {len(sums) - n_viirs} MODIS rescaled)")
 
     # harmonization: the rule is used only if the national test passed, and only where the department passed
     hfile = P / "harmonization.json"
@@ -117,10 +133,18 @@ def main() -> None:
               f"national test within the {hs['national_margin_pct']}% margin under both readings")
         check(hs["quantity_with_lower_national_error"] == q, "the harmonized quantity is the one with the lower national error")
         check(len(h["factors"]) == 12 and all(f > 0 for f in h["factors"]), "12 positive monthly factors")
+        ver = hs.get("department_version", 1)
+        by_v = hs["results"][q].get("departments_shown_from_2003_by_version", {})
+        check(h.get("department_version", 1) == ver and (ver == 1 or by_v.get("v2", 0) > by_v.get("v1", 0)),
+              f"department version {ver} chosen by the rule fixed in advance (more departments shown from 2003)")
+        check(all(v.get("level", 1.0) > 0 for v in h["departments"].values())
+              and (ver == 2 or all(v.get("level", 1.0) == 1.0 for v in h["departments"].values())),
+              "department levels are positive, and 1.0 everywhere in version 1")
         if "anomaly_modis_era_departamento" in t:
             era = t["anomaly_modis_era_departamento"]
-            shown = {c for c, v in h["departments"].items() if v["status"] in ("ok", "low_confidence")}
-            check(set(era["dpto_code"]) <= shown, "MODIS-era anomalies exist only for departments that passed the test")
+            # Since November 15, 2026 every department shows the MODIS era, with a warning where the test failed (Part 5)
+            check(set(era["dpto_code"]) <= set(h["departments"]) and len(set(era["dpto_code"])) >= 29,
+                  f"MODIS-era anomalies exist for every department with MODIS data ({len(set(era['dpto_code']))})")
             check(pd.to_datetime(era["date"]).max() < pd.to_datetime(status["date"]).min(), "MODIS-era anomalies end before the VIIRS reference starts")
             check(pd.to_datetime(era["date"]).min().year >= 2003, "MODIS era starts in 2003")
             eok = era[era["level"] != "insufficient"]

@@ -115,8 +115,8 @@ export function DataPage() {
             <p>
               AI assistants were used to speed up the work: Claude Code (Anthropic) helped write the data scripts, the data
               documentation and this web application; Codex helped with the DANE boundary processing. Every AI-assisted file
-              carries a note in its header. No figure was invented or estimated by AI. The project logo is original artwork
-              drawn in code and is not an agency insignia.
+              carries a note in its header. No figure was invented or estimated by AI. <b>The project logo and favicon are AI-generated:</b> drawn
+              in code (SVG) by Claude Code. They are not an agency insignia.
             </p>
           </div>
         </div>

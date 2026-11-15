@@ -23,8 +23,17 @@ export function isoToDay(iso: string): number {
   return ymdToDay(y, m - 1, d);
 }
 
+/** A real calendar date written as YYYY-MM-DD (rejects 2024-02-30, which Date.parse would roll into March). */
 export function isValidIso(iso: string): boolean {
-  return /^\d{4}-\d{2}-\d{2}$/.test(iso) && !Number.isNaN(Date.parse(iso));
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return false;
+  const [y, m, d] = iso.split('-').map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  return y >= 1000 && dt.getUTCFullYear() === y && dt.getUTCMonth() === m - 1 && dt.getUTCDate() === d;
+}
+
+/** Clamp a day index into [lo, hi]. */
+export function clampDay(day: number, lo: number, hi: number): number {
+  return Math.min(hi, Math.max(lo, day));
 }
 
 function dayToDate(day: number): Date {

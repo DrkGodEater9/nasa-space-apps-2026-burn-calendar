@@ -108,7 +108,7 @@ export const MonthHeadline = memo(function MonthHeadline({ row, partial }: { row
       </div>
       <div className="headline-text">
         <strong>{MONTHS_LONG[row.m]} {row.y}</strong> recorded <strong>{fmtInt(row.cd)}</strong> hot spots
-        {row.med !== null && <> against a median of <strong>{fmtNum(row.med)}</strong> in the {row.histYears} other complete {MONTHS_LONG[row.m]}s since 2012</>}.
+        {row.med !== null && <> against a median of <strong>{fmtNum(row.med)}</strong> in the {row.histYears} other complete {MONTHS_LONG[row.m]}s since 2003 (2003–2011 estimated from MODIS)</>}.
         {row.pct !== null && <> It is higher than or equal to <strong>{Math.round(row.pct)}%</strong> of them.</>}
         {partial && (
           <div className="headline-partial">

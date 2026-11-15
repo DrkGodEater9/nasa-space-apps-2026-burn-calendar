@@ -7,6 +7,8 @@
   "national_margin_pct": 15.0,
   "department_margin_pct": 30.0,
   "min_observed_for_department_month": 30,
+  "min_level_data": 100,
+  "department_version": 2,
   "quantity_with_lower_national_error": "detections",
   "results": {
     "cells": {
@@ -45,13 +47,21 @@
         "12": 7.38
       },
       "evaluable_department_months": 2619,
-      "department_months_within_margin_pct": 44.7,
-      "department_month_median_error_pct": 33.98,
+      "department_months_within_margin_pct": 55.6,
+      "department_month_median_error_pct": 25.49,
       "departments_by_status": {
-        "viirs_only": 18,
-        "ok": 10,
-        "insufficient": 4,
-        "low_confidence": 1
+        "viirs_only": 16,
+        "ok": 13,
+        "insufficient": 4
+      },
+      "department_version": 2,
+      "departments_shown_from_2003_by_version": {
+        "v1": 11,
+        "v2": 13
+      },
+      "department_month_median_error_pct_by_version": {
+        "v1": 33.98,
+        "v2": 25.49
       }
     },
     "detections": {
@@ -90,13 +100,22 @@
         "12": 4.03
       },
       "evaluable_department_months": 2788,
-      "department_months_within_margin_pct": 50.5,
-      "department_month_median_error_pct": 29.72,
+      "department_months_within_margin_pct": 57.1,
+      "department_month_median_error_pct": 24.78,
       "departments_by_status": {
-        "ok": 14,
-        "viirs_only": 14,
+        "ok": 16,
+        "viirs_only": 12,
         "insufficient": 4,
         "low_confidence": 1
+      },
+      "department_version": 2,
+      "departments_shown_from_2003_by_version": {
+        "v1": 15,
+        "v2": 17
+      },
+      "department_month_median_error_pct_by_version": {
+        "v1": 29.72,
+        "v2": 24.78
       }
     }
   }

@@ -19,10 +19,10 @@ It is meant for anyone who needs to read fire activity without processing satell
 
 ## What it does
 
-- **One calendar from 2003 to today.** From 2012 the values are what VIIRS observed. For 2003-2011, MODIS is converted to VIIRS-equivalent units with one factor per calendar month. Those days are estimates and are always hatched and labeled as such.
+- **One calendar from 2003 to today.** From 2012 the values are what VIIRS observed. For 2003-2011, MODIS is converted to VIIRS-equivalent units with one factor per calendar month, adjusted to each department. Those days are estimates and are always hatched and labeled as such.
 - **Region and dates chosen by the user:** search by name, click the map, draw a polygon or a box, or type coordinates.
 - **Number of hot spots detected** per day, with the 7-day total and the yearly totals.
-- **Historical comparison and anomalies:** each day is compared with the same season in the other years (percentiles 75, 90 and 97.5), and each month with the median of the same month. The current month is compared with the same days of that month in other years.
+- **Historical comparison and anomalies:** each day is compared with the same season in the other years (percentiles 75, 90 and 97.5), and each month with the median of the same month in every other year since 2003 (2003-2011 estimated from MODIS). The current month is compared with the same days of that month in those years. We use the median, not the average, so one extreme year does not hide unusual activity.
 - **Downloadable CSV:** the individual hot spot points of the search (date, time, latitude, longitude, sensor, confidence, fire radiative power), the daily series, and the monthly comparison.
 - **Accessible color scales,** tested with color vision deficiency simulations and WCAG contrast.
 
@@ -37,10 +37,10 @@ Our method, in short:
 1. **Quality filters.** Low-confidence detections are dropped, along with volcanoes, gas flares and other static sources.
 2. **Local time.** Every detection is moved to Colombian time (UTC-5) before it is assigned to a day.
 3. **One reference sensor.** VIIRS S-NPP since 2012. NOAA-20 fills the days S-NPP has no data. Satellites are never summed on the same day.
-4. **MODIS rescaled to VIIRS units.** One factor per calendar month, from the years when both sensors overlap (2013-2025).
+4. **MODIS rescaled to VIIRS units.** One factor per calendar month, from the years when both sensors overlap (2013-2025), adjusted to the VIIRS/MODIS level of each department.
 5. **Tested before it was used.** Leaving one year out at a time, with the error margins written down before the test ran.
 
-**What the test showed.** The national monthly total is predicted with a median error of 6.9% (margin 15%). At department scale, 14 of 33 departments are within the 30% margin, 1 is shown as low confidence, 14 are not, and 4 have too few detections to evaluate. So the calendar from 2003 exists for the national totals and for the departments that passed (74% of the national fire activity). The other departments, the municipalities and drawn areas start in 2012, because the rule did not pass or was not tested there.
+**What the test showed.** The national monthly total is predicted with a median error of 6.9% (margin 15%). At department scale, with each department's own level, 16 of 33 departments are within the 30% margin, 1 is shown as low confidence, 12 are not, and 4 have too few detections to evaluate (with the national factor alone it was 14, 1, 14 and 4; the department level was written down before it was tested). The departments that passed hold about 78% of the VIIRS hot spots of 2013-2025. **Every area still shows the calendar from 2003**, because that is what the challenge asks: the departments that failed or have too few detections, and every municipality and drawn area (which use the factor of their department and were never tested at that scale), carry a visible low-confidence warning.
 
 **Limits we want you to know.** The MODIS era is an estimate: that the 2013-2025 factor also held in 2003-2011 cannot be verified, because VIIRS did not exist then. 2000-2002 are excluded, because only one MODIS satellite was flying. A hot spot is a thermal anomaly seen by a satellite, not a confirmed fire, and clouds can hide fires.
 
@@ -52,7 +52,7 @@ We reproduced the hot spot totals that IDEAM, Colombia's environmental agency, p
 
 ## Run it
 
-**Web app** (needs Node.js 20 or later):
+**Web app** (needs Node.js 24 or later: `npm run verify` and `npm run a11y` run TypeScript files directly with Node):
 
 ```bash
 cd web
@@ -105,7 +105,7 @@ We used AI assistants to build this project, and we want to be exact about how.
 
 **What the team did**
 
-- **We chose how to harmonize the two sensors.** The method is ours: the quality filters, the reference sensor, the seasonal baseline, the alert levels, and the rule that converts MODIS to VIIRS units with one factor per month.
+- **We chose how to harmonize the two sensors.** The method is ours: the quality filters, the reference sensor, the seasonal baseline, the alert levels, and the rule that converts MODIS to VIIRS units with one factor per month adjusted to each department.
 - **We obtained the data.** We requested the historical archive from NASA FIRMS, got the API key, and downloaded the official boundaries from DANE and the reports from IDEAM.
 - **We set the test and its margins** (15% national, 30% per department) before any result was known.
 - **We made the decisions after the results:** which quantity to count, and what to show where the test did not pass.

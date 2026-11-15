@@ -5,7 +5,7 @@ import { memo, useState, type ReactNode } from 'react';
 import type { AreaSeries, Episode, RangeSummary, RefContext } from '../lib/analysis.ts';
 import type { Area, ColorMode, Sensor } from '../lib/types.ts';
 import { LEVELS, levelInfo } from '../lib/colors.ts';
-import { dayParts, dayToISO, formatDay, isValidIso, isoToDay, ymdToDay } from '../lib/dates.ts';
+import { clampDay, dayParts, dayToISO, formatDay, isValidIso, isoToDay, ymdToDay } from '../lib/dates.ts';
 import { fmtInt, plural } from '../lib/format.ts';
 import { Icon } from './Icon.tsx';
 
@@ -86,7 +86,16 @@ export function RangeControls({ from, to, minDay, maxDay, onChange, sensor, onSe
   const shown: CalendarView = customOpen ? 'custom' : current;
   const years: number[] = [];
   for (let y = endY; y >= dayParts(minDay).y; y--) years.push(y);
-  const set = (a: number, b: number) => onChange(Math.max(minDay, Math.min(a, b)), Math.min(maxDay, Math.max(a, b)));
+  const set = (a: number, b: number) => {
+    const x = clampDay(a, minDay, maxDay);
+    const y = clampDay(b, minDay, maxDay);
+    onChange(Math.min(x, y), Math.max(x, y));
+  };
+  // Draft text of the date inputs: while the user types a year, the browser reports intermediate values such
+  // as 0002-05-01. Those are kept as a draft and only applied once they are a real date inside the range.
+  const [draftFrom, setDraftFrom] = useState<string | null>(null);
+  const [draftTo, setDraftTo] = useState<string | null>(null);
+  const inRange = (iso: string) => isValidIso(iso) && isoToDay(iso) >= minDay && isoToDay(iso) <= maxDay;
   const selectedYear = years.find((y) => from === Math.max(minDay, ymdToDay(y, 0, 1)) && to === Math.min(maxDay, ymdToDay(y, 11, 31)));
 
   const pick = (v: CalendarView) => {
@@ -121,14 +130,22 @@ export function RangeControls({ from, to, minDay, maxDay, onChange, sensor, onSe
         <div className="range-row custom">
           <label className="date-field">
             <span>From</span>
-            <input type="date" value={dayToISO(from)} min={dayToISO(minDay)} max={dayToISO(maxDay)}
-              onChange={(e) => isValidIso(e.target.value) && set(isoToDay(e.target.value), to)} />
+            <input type="date" value={draftFrom ?? dayToISO(from)} min={dayToISO(minDay)} max={dayToISO(maxDay)}
+              onChange={(e) => {
+                const v = e.target.value;
+                if (inRange(v)) { setDraftFrom(null); set(isoToDay(v), to); } else setDraftFrom(v);
+              }}
+              onBlur={() => setDraftFrom(null)} />
           </label>
           <span className="range-arrow"><Icon name="arrow" size={14} /></span>
           <label className="date-field">
             <span>To</span>
-            <input type="date" value={dayToISO(to)} min={dayToISO(minDay)} max={dayToISO(maxDay)}
-              onChange={(e) => isValidIso(e.target.value) && set(from, isoToDay(e.target.value))} />
+            <input type="date" value={draftTo ?? dayToISO(to)} min={dayToISO(minDay)} max={dayToISO(maxDay)}
+              onChange={(e) => {
+                const v = e.target.value;
+                if (inRange(v)) { setDraftTo(null); set(from, isoToDay(v)); } else setDraftTo(v);
+              }}
+              onBlur={() => setDraftTo(null)} />
           </label>
           <div className="presets">
             <button className="chip" onClick={() => set(maxDay - 89, maxDay)}>Last 90 days</button>
@@ -149,7 +166,7 @@ export function RangeControls({ from, to, minDay, maxDay, onChange, sensor, onSe
           value={sensor}
           onChange={onSensor}
           options={[
-            { value: 'ref', label: 'Harmonized calendar', title: 'VIIRS S-NPP since 2012 (NOAA-20 fills its gaps), used for all alerts. Departments that passed the harmonization test also show MODIS rescaled to VIIRS units back to 2003.' },
+            { value: 'ref', label: 'Harmonized calendar', title: 'VIIRS S-NPP since 2012 (NOAA-20 fills its gaps), used for all alerts, and MODIS rescaled to VIIRS units back to 2003 (estimated, hatched).' },
             { value: 'modis', label: 'MODIS, raw', title: 'MODIS Collection 6.1 since 2003, as observed and not rescaled.' },
             { value: 'n21', label: 'NOAA-21 · info', title: 'VIIRS NOAA-21 since 2023. Informational layer only.' },
           ]}
@@ -286,21 +303,24 @@ export const DataQuality = memo(function DataQuality({ area, series, summary, ct
   if (area.members.length > 1 && area.kind !== 'department') {
     items.push({ tone: 'info', text: <>For several municipalities the level shown each day is the highest among them.</> });
   }
-  if (series.eraReason === 'shown' && series.era) {
+  if (series.era) {
+    const why = series.eraReason === 'department_failed'
+      ? <> <b>Low confidence:</b> this department did not pass the harmonization test (estimated error above 30% in most months).</>
+      : series.eraReason === 'insufficient'
+        ? <> <b>Low confidence:</b> there are too few detections here to test the harmonization, so its error is unknown.</>
+        : series.eraReason === 'scale_not_tested'
+          ? <> <b>Low confidence:</b> the rescaling was tested for departments, not for municipalities or drawn areas. Each municipality uses the factor of its department, and the error at this scale is unknown.</>
+          : series.era.status === 'low_confidence'
+            ? <> For this department the estimated error is above 30%, so read them as low confidence.</>
+            : null;
     items.push({
-      tone: series.era.status === 'low_confidence' ? 'warn' : 'info',
+      tone: why ? 'warn' : 'info',
       text: <>
         Days before {formatDay(ctx.refStart, false)} are <b>MODIS rescaled to VIIRS units (estimated)</b>, hatched in the calendar.
-        {series.era.status === 'low_confidence' ? <> For this department the estimated error is above 30%, so read them as low confidence.</> : null}
+        {why}
         {ctx.harm ? <> {ctx.harm.notice}</> : null}
       </>,
     });
-  } else if (series.eraReason === 'department_failed') {
-    items.push({ tone: 'warn', text: <>This department <b>did not pass the harmonization test</b> (estimated error above 30% in most months), so its calendar starts in 2012. MODIS 2003–2011 is shown raw, not rescaled, in the "MODIS, raw" view.</> });
-  } else if (series.eraReason === 'insufficient') {
-    items.push({ tone: 'info', text: <>There are too few detections here to evaluate the harmonization, so the calendar starts in 2012. MODIS 2003–2011 is shown raw in the "MODIS, raw" view.</> });
-  } else if (series.eraReason === 'scale_not_tested') {
-    items.push({ tone: 'info', text: <>The single calendar from 2003 exists for the departments that passed the harmonization test and for the national totals. The rescaling was <b>not tested at municipality scale</b>, so this area starts in 2012. MODIS 2003–2011 is shown raw in the "MODIS, raw" view.</> });
   }
   items.push({ tone: 'info', text: <>Cloud cover can hide fires: a zero does not guarantee absence of fire.</> });
 

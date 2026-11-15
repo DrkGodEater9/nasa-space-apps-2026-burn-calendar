@@ -1,8 +1,9 @@
 """Leave-one-year-out test of the team's MODIS -> VIIRS harmonization rule.
 
 Implements docs/HARMONIZATION.md exactly: one factor per calendar month at national
-scale, from the MODIS / VIIRS S-NPP overlap of 2013-2025. Nothing is tuned: the margins are
-the ones the team wrote before the test ran.
+scale, from the MODIS / VIIRS S-NPP overlap of 2013-2025 (Part 1), and the department level
+of version 2 (Part 3). Nothing is tuned: the margins are the ones the team wrote before the test
+ran, and the version in use is chosen by the rule written in Part 3.
 
 Run from the repository root after scripts/build_dataset.py:
     python scripts/harmonization_test.py
@@ -32,6 +33,7 @@ YEARS = list(range(2013, 2026))          # overlap used by the team
 NATIONAL_MARGIN = 15.0                   # percent, median absolute error, national monthly total
 DEPARTMENT_MARGIN = 30.0                 # percent, per department and month
 MIN_OBSERVED = 30                        # VIIRS cells needed for a department-month to be evaluated
+MIN_LEVEL_DATA = 100                     # version 2: MODIS and S-NPP detections a department needs for its own level
 QUANTITIES = {"cells": "active_cells", "detections": "detections"}
 
 
@@ -51,7 +53,18 @@ def factors(nat: pd.DataFrame, exclude_year: int | None = None) -> pd.Series:
     return g["snpp"] / g["modis"]
 
 
-def run(quantity: str, column: str, daily: pd.DataFrame):
+def level_ratios(dep: pd.DataFrame, exclude_year: int | None = None) -> pd.Series:
+    """Version 2 (docs/HARMONIZATION.md, Part 3): R_d / R_nat per department, over all months of the
+    training years. Departments with fewer than MIN_LEVEL_DATA MODIS or S-NPP detections keep 1.0."""
+    t = dep if exclude_year is None else dep[dep["year"] != exclude_year]
+    g = t.groupby("dpto_code")[["modis", "snpp"]].sum()
+    r_nat = g["snpp"].sum() / g["modis"].sum()
+    enough = (g["modis"] >= MIN_LEVEL_DATA) & (g["snpp"] >= MIN_LEVEL_DATA)
+    ratio = (g["snpp"] / g["modis"].where(g["modis"] > 0)) / r_nat
+    return ratio.where(enough, 1.0)
+
+
+def run(quantity: str, column: str, daily: pd.DataFrame, version: int = 1):
     dep = monthly_table(daily, column)
     nat = dep.groupby(["year", "month"], as_index=False)[["modis", "snpp"]].sum()
 
@@ -72,9 +85,13 @@ def run(quantity: str, column: str, daily: pd.DataFrame):
     by_year = national.groupby("year")["abs_error_pct"].median()
     h2 = float(by_month.max())
 
-    # ---- leave one year out, department-month (national factor applied to the department)
+    # ---- leave one year out, department-month
+    # version 1: national factor applied to the department; version 2: times the department level R_d / R_nat
     d = dep.copy()
     d["factor"] = [loyo[y][m] for y, m in zip(d["year"], d["month"])]
+    if version == 2:
+        lv = {y: level_ratios(dep, exclude_year=y) for y in YEARS}
+        d["factor"] *= [float(lv[y].get(c, 1.0)) for y, c in zip(d["year"], d["dpto_code"])]
     d["predicted"] = d["factor"] * d["modis"]
     d["evaluable"] = d["snpp"] >= MIN_OBSERVED
     d["abs_error_pct"] = np.where(d["evaluable"], (d["predicted"] - d["snpp"]).abs() / d["snpp"].where(d["snpp"] > 0, 1) * 100, np.nan)
@@ -100,7 +117,10 @@ def run(quantity: str, column: str, daily: pd.DataFrame):
                           "median_abs_error_pct": round(med, 2), "calendar_months_evaluated": int(len(per_month)),
                           "calendar_months_above_margin": failing, "status": status})
     departments = pd.DataFrame(dept_rows)
-    band = (ev.groupby(["dpto_code", "month"])["abs_error_pct"].agg(median_abs_error_pct="median", evaluable_years="size")
+    # level applied to each department with all 13 years (1.0 = national factor)
+    levels = level_ratios(dep) if version == 2 else pd.Series(1.0, index=departments["dpto_code"])
+    departments["level"] = departments["dpto_code"].map(levels).fillna(1.0).round(4)
+    band =(ev.groupby(["dpto_code", "month"])["abs_error_pct"].agg(median_abs_error_pct="median", evaluable_years="size")
             .round(2).reset_index())
     band.insert(0, "quantity", quantity)
 
@@ -125,23 +145,39 @@ def run(quantity: str, column: str, daily: pd.DataFrame):
     return national, departments, fac, summary, band
 
 
+def shown_from_2003(departments: pd.DataFrame) -> int:
+    return int(departments["status"].isin(["ok", "low_confidence"]).sum())
+
+
 def evaluate(daily: pd.DataFrame, write: bool = True) -> dict:
-    """Run the test for both quantities. Returns, per quantity, the tables and the summary."""
-    res, summary = {}, {}
-    for quantity, column in QUANTITIES.items():
-        national, departments, fac, s, band = run(quantity, column, daily)
+    """Run the test for both quantities and both department versions (docs/HARMONIZATION.md, Parts 1 and 3).
+    Returns, per quantity, the tables and the summary of the version in use."""
+    runs = {(v, q): run(q, c, daily, version=v) for v in (1, 2) for q, c in QUANTITIES.items()}
+    # the national test does not depend on the version: the quantity is chosen as before
+    winner = min(QUANTITIES, key=lambda q: runs[(1, q)][3]["h1_median_over_156_year_months_pct"])
+    # Part 3: version 2 replaces version 1 only if it shows more departments from 2003, for the quantity in use
+    shown = {v: shown_from_2003(runs[(v, winner)][1]) for v in (1, 2)}
+    version = 2 if shown[2] > shown[1] else 1
+    res, summary = {"winner": winner, "version": version}, {}
+    for quantity in QUANTITIES:
+        national, departments, fac, s, band = runs[(version, quantity)]
+        s = {**s, "department_version": version,
+             "departments_shown_from_2003_by_version": {f"v{v}": shown_from_2003(runs[(v, quantity)][1]) for v in (1, 2)},
+             "department_month_median_error_pct_by_version": {f"v{v}": runs[(v, quantity)][3]["department_month_median_error_pct"] for v in (1, 2)}}
         res[quantity] = {"national": national, "departments": departments, "factors": fac, "summary": s, "band": band}
         summary[quantity] = s
-    winner = min(QUANTITIES, key=lambda q: summary[q]["h1_median_over_156_year_months_pct"])
-    res["winner"] = winner
+    comparison = pd.concat([runs[(v, q)][1].assign(version=v) for v in (1, 2) for q in QUANTITIES])
+    res["comparison"] = comparison
     if write:
         out = {
             "ai_note": "Computed by scripts/harmonization_test.py (written with AI help). The rule and margins are the team's; "
                        "see docs/HARMONIZATION.md.",
             "years": [YEARS[0], YEARS[-1]], "national_margin_pct": NATIONAL_MARGIN,
             "department_margin_pct": DEPARTMENT_MARGIN, "min_observed_for_department_month": MIN_OBSERVED,
+            "min_level_data": MIN_LEVEL_DATA, "department_version": version,
             "quantity_with_lower_national_error": winner, "results": summary,
         }
+        comparison.to_csv(P / "harmonization_version_comparison.csv", index=False)
         pd.concat([res[q]["national"] for q in QUANTITIES]).to_csv(P / "harmonization_test_national.csv", index=False)
         pd.concat([res[q]["departments"] for q in QUANTITIES]).to_csv(P / "harmonization_test_departments.csv", index=False)
         pd.concat([res[q]["factors"] for q in QUANTITIES]).to_csv(P / "harmonization_factors.csv", index=False)
@@ -165,6 +201,7 @@ def main() -> None:
               f"{s['department_months_within_margin_pct']}%, median error {s['department_month_median_error_pct']}%")
         print("departments by status:", s["departments_by_status"])
     print("quantity with the lower national error:", res["winner"])
+    print("department version in use:", res["version"], res[res["winner"]]["summary"]["departments_shown_from_2003_by_version"])
 
 
 if __name__ == "__main__":

@@ -27,7 +27,7 @@ The 1,122 areas include non-municipalized areas, so they are not all legal munic
 - **Dates are local Colombian dates (UTC-5)**, stored as `date` (Parquet `date32`, ISO `YYYY-MM-DD` in CSV).
 - **Sparse tables.** Rows exist only where there was activity. A municipality-day that is missing from a daily table means **zero active cells**, unless the day is `no_data` in `reference_status_daily`.
 - **Unit: hot spots.** `detections` (called `hotspots` in the summary tables) is the number of accepted FIRMS detections that day. It is the harmonized quantity since November 14, 2026 (see [HARMONIZATION.md](HARMONIZATION.md)). `active_cells`, the number of 1 km (0.01 degree) grid cells with at least one accepted detection, is kept as a second figure. Counts are never summed across sensors on the same day.
-- **Estimates are separate from observations.** MODIS rescaled to VIIRS units exists only for 2003-01-01 to 2012-01-19 and only for the departments that passed the harmonization test. It is never written into the VIIRS reference tables.
+- **Estimates are separate from observations.** MODIS rescaled to VIIRS units exists only for 2003-01-01 to 2012-01-19. Since November 15, 2026 it is shown for every area, with a low-confidence warning where the test failed or was not run (HARMONIZATION.md Part 5). It is never written into the VIIRS reference tables; it only enters the monthly history (see below).
 - Boundaries are the DANE MGN 2018 municipality-level areas (1,122 areas, not all legal municipalities). The municipality of a cell is the one containing the cell centroid.
 
 ## Tables
@@ -69,7 +69,7 @@ One row per municipality (or department, key `dpto_code`) and day where the 7-da
 `insufficient` means fewer than 10 baseline active days: show the raw count in neutral gray labeled "insufficient history" and use the department row as fallback. `unusual` and `extreme` need at least 3 hot spots (otherwise capped at `elevated`).
 
 ### `anomaly_modis_era_departamento`
-The same columns, for the MODIS era (2003-01-01 to 2012-01-19) and only for the departments that passed the harmonization test. `hotspots_7d` is MODIS rescaled to VIIRS units (a decimal estimate), and the percentiles come from the MODIS era itself. These are "internal anomalies of the MODIS era": do not show them as current alerts and do not compare them with the VIIRS-era levels.
+The same columns, for the MODIS era (2003-01-01 to 2012-01-19), for every department with MODIS data (since November 15, 2026). `hotspots_7d` is MODIS rescaled to VIIRS units (a decimal estimate), and the percentiles come from the MODIS era itself. These are "internal anomalies of the MODIS era": do not show them as current alerts and do not compare them with the VIIRS-era levels.
 
 ### `monthly_municipio` and `monthly_departamento`
 One row per municipality (or department) and month, for every month in the reference range.
@@ -83,7 +83,7 @@ One row per municipality (or department) and month, for every month in the refer
 | `month_complete` | False for the first and last partial months |
 | `compare_first_day`, `compare_last_day` | Day-of-month range covered and compared (1 to the last day for complete months; for example 1-13 for the current month) |
 | `history_years` | Other years used as history (complete months, or the same days for a partial month) |
-| `hist_median_hotspots` | Median `hotspots` of the same month in other years. **For a partial month, the median over the same days of the month** (never whole months) |
+| `hist_median_hotspots` | Median `hotspots` of the same month in other years since 2003: VIIRS from 2012, MODIS rescaled to VIIRS units (factor of the month × department level) for 2003-2011, using only windows that end before 2012-01-20. **For a partial month, the median over the same days of the month** (never whole months). A decimal, because the MODIS-era values are estimates |
 | `ratio_vs_median` | `hotspots / hist_median_hotspots` ("2.3x normal"); empty if the median is 0 |
 | `percentile_vs_history` | Percent of historical months with `hotspots` less than or equal to this one |
 
@@ -100,7 +100,7 @@ For a static web app that cannot read Parquet. Built by `python scripts/export_w
 |---|---|
 | `manifest.json` | Departments (code, name, file, bytes), `levels`, `status_legend`, date bases, the fixed notice, alert parameters, `quantity`, and `harmonization` (see below) |
 | `status.json` | One status code per day of the reference series (`start`, `end`, `legend`, `status[]`), `c[]`, the national hot spots per day (used to compare a partial month day for day at national level), and `modis_era` (`start`, `c[]`): the national MODIS hot spots per day of the MODIS era, raw |
-| `departments.json` | Department-level `alerts` and `monthly` for all 33 departments (the fallback for municipalities with insufficient history), and `alerts_modis_era` for the departments that passed the harmonization test |
+| `departments.json` | Department-level `alerts` and `monthly` for all 33 departments (the fallback for municipalities with insufficient history), and `alerts_modis_era` for every department with MODIS data |
 | `departments/<code>.json` | One department: `municipalities`, `daily`, `other_sensors`, `alerts`, `monthly` |
 
 Format rules:
@@ -110,7 +110,7 @@ Format rules:
 - **Level codes** `l` index into `manifest.levels`: `normal`, `elevated`, `unusual`, `extreme`, `insufficient`. Status codes index into `status_legend`: `snpp`, `n20_fill`, `no_data`.
 - **Sparse:** `daily` has only rows with activity (a missing municipality-day is zero, unless the day is `no_data`). `municipalities` lists every area of the department, including those with no activity.
 - **Columns:** `daily` is `m, d, c` (hot spots) and `k` (active 1 km cells). `alerts` is `m, d, c` (7-day hot spots), `p75, p90, p975, act` (baseline active days), `l`. `monthly` is `m, mo, cd` (hot spots in the month), `ad` (active days), `nd` (no-data days), `ok` (complete month, 0/1), `d1, d2` (day-of-month range compared), `med`, `ratio`, `pct`. `other_sensors` is `s, m, d, c, k` with `legend` listing the sensors (MODIS Collection 6.1 and VIIRS NOAA-21); `c` is hot spots as observed, never rescaled in the file.
-- **`manifest.harmonization`:** `accepted` (false means the test failed and nothing may be rescaled), `factors` (12, January first), `national_error_pct` (12, the median test error per calendar month), `modis_era` (first and last day), `modis_no_data_days`, `departments` (per code: `status` = `ok`, `low_confidence`, `viirs_only` or `insufficient`, and `error_pct`, 12 values or null), and `notice` (the fixed text to show). **To draw the single calendar:** for a department with status `ok` or `low_confidence`, the value of a day before the VIIRS reference starts is its MODIS hot spots multiplied by the factor of that calendar month. Draw those days as estimates (hatched), show the error of that month, and never do this for a municipality, a drawn area, or a department with another status.
+- **`manifest.harmonization`:** `accepted` (false means the test failed and nothing may be rescaled), `factors` (12, January first), `national_error_pct` (12, the median test error per calendar month), `modis_era` (first and last day), `modis_no_data_days`, `department_version` (2 since November 15, 2026: see HARMONIZATION.md, Parts 3 and 4), `departments` (per code: `status` = `ok`, `low_confidence`, `viirs_only` or `insufficient`, `level` (the department level, 1 = national factor), and `error_pct`, 12 values or null), and `notice` (the fixed text to show). `era_scope` = `all_areas` since November 15, 2026. **To draw the single calendar:** for any area, the value of a day before the VIIRS reference starts is the sum over its municipalities of their MODIS hot spots × the factor of that calendar month × the `level` of the municipality's department. The national totals use the factor alone, so in the MODIS era the departments do not add up exactly to the national estimate. Draw those days as estimates (hatched). Departments with status `ok` show the error of that month; departments with another status, municipalities and drawn areas show a visible low-confidence warning (HARMONIZATION.md Part 5).
 - **Missing numbers are null.**
 - **Size:** about 41 MB raw in total, but each department file is 0.06 to 0.5 MB once gzipped, which static hosts do automatically. Load only the departments the user selects.
 
@@ -134,7 +134,7 @@ In the web app, a drawn shape returns the points of the municipalities used for 
 
 ### Other files
 - `build_info.json`: parameters, mask size, filter counts, reference range.
-- `harmonization.json`, `harmonization_summary.json`, `harmonization_factors.csv`, `harmonization_test_national.csv`, `harmonization_test_departments.csv`, `harmonization_department_month_error.csv`: the harmonization rule, its factors and the full leave-one-year-out test (see [HARMONIZATION.md](HARMONIZATION.md)).
+- `harmonization.json`, `harmonization_summary.json`, `harmonization_factors.csv`, `harmonization_test_national.csv`, `harmonization_test_departments.csv` (with the `level` of each department), `harmonization_department_month_error.csv`, `harmonization_version_comparison.csv` (both department versions side by side): the harmonization rule, its factors and the full leave-one-year-out test (see [HARMONIZATION.md](HARMONIZATION.md)).
 - `filter_report.csv`: detections kept and dropped per sensor and reason.
 - `validation_snpp_dept_month_2023_2024.csv`: raw S-NPP counts per department and month.
 - `validation_ideam_*.csv`, `ideam_semester_*.csv`: the IDEAM figures and the comparison against our raw counts (see [VALIDATION.md](VALIDATION.md)). Not used by the web app.
@@ -145,7 +145,7 @@ In the web app, a drawn shape returns the points of the municipalities used for 
 
 Wherever MODIS rescaled to VIIRS units is shown, also show the harmonization notice (`manifest.harmonization.notice`):
 
-> MODIS data (2003-2011) are converted to VIIRS-equivalent units with a different factor for each month, estimated from the years when both sensors overlap (2013-2025). They are estimates, not observations. The error can be larger in regions and months with few detections. The assumption that the factor also holds in 2003-2011 cannot be verified. Data from different satellites are never summed on the same day.
+> MODIS data (2003-2011) are converted to VIIRS-equivalent units with a different factor for each month and department, estimated from the years when both sensors overlap (2013-2025). They are estimates, not observations. The error can be larger in regions and months with few detections. The assumption that the factor also holds in 2003-2011 cannot be verified. Data from different satellites are never summed on the same day.
 
 ## Polygon queries
 

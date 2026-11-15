@@ -61,7 +61,7 @@ export const NationalOverview = memo(function NationalOverview(p: Props) {
         <AreaPicker geo={p.geo} onDepartment={p.onDepartment} onMunicipality={p.onMunicipality} onPoint={p.onPoint} onBox={p.onBox} />
         <div className="steps">
           <div><span>1</span><p>Pick an area: search, click the map, <button className="link-btn" onClick={p.onDrawTool}>draw a polygon</button> or type coordinates.</p></div>
-          <div><span>2</span><p>Choose dates. VIIRS starts in 2012; departments that passed the harmonization test go back to 2003 with MODIS rescaled to VIIRS units.</p></div>
+          <div><span>2</span><p>Choose dates. Every area goes back to 2003: VIIRS from 2012, MODIS rescaled to VIIRS units before (estimated, with a confidence warning where the rescaling was not tested or failed).</p></div>
           <div><span>3</span><p>Read the calendar, compare with history and download the CSV.</p></div>
         </div>
         <div className="suggest">
@@ -103,7 +103,7 @@ export const NationalOverview = memo(function NationalOverview(p: Props) {
         <button className="link-btn" onClick={() => setShowAll(!showAll)}>{showAll ? 'Show top 10' : 'Show all 33 departments'}</button>
       </Card>
 
-      <Card title="National activity, last 36 months" icon="chart" sub="Hot spots per month, all 33 departments (VIIRS reference). The dashed line is the median of the same month in the other years; orange months are above the 90th percentile of their history.">
+      <Card title="National activity, last 36 months" icon="chart" sub="Hot spots per month, all 33 departments (VIIRS reference). The dashed line is the median of the same month in the other years since 2003 (2003–2011 estimated from MODIS); orange months are above the 90th percentile of their history.">
         <MonthlyChart rows={last36} />
       </Card>
 

@@ -46,19 +46,24 @@ VIIRS reports about four times more hot spots than MODIS for the same fires: its
 
 The rule:
 - **One factor per calendar month**, at national scale, from the years when both sensors overlap (2013-2025). The factor is the VIIRS S-NPP total of that month divided by the MODIS total. It goes from 3.56 (November) to 5.11 (July).
+- **Adjusted to each department** (version 2, `docs/HARMONIZATION.md` Parts 3 and 4). A department's factor is the national monthly factor times its level: its VIIRS/MODIS ratio over 2013-2025 divided by the national one. Departments with fewer than 100 detections keep the national factor. The national totals keep the national factor, so in 2003-2011 the departments do not add up exactly to the national estimate.
 - **2003-01-01 to 2012-01-19** are MODIS multiplied by that factor.
 - **2000-2002 are excluded.** Until mid-2002 only one MODIS satellite (Terra) was flying, so the factor, computed with two satellites, would not apply.
 
 The rule was tested by leaving one year out, with the margins written before the test ran. What follows from the test:
 
+Every area shows one calendar from 2003 (team decision of November 15, `docs/HARMONIZATION.md` Part 5). What the test says about each one decides the warning shown with it:
+
 | Where | Result | What is shown |
 |---|---|---|
-| National totals | Passed (median error 6.9%, margin 15%) | One series from 2003 |
-| 14 departments | Passed (margin 30%) | One calendar from 2003 |
-| 1 department (Huila) | Above 30%, but not in most months | From 2003, marked low confidence |
-| 14 departments | Above 30% in most months | From 2012. MODIS shown raw, in its own view |
-| 4 departments | Too few detections to evaluate | From 2012 |
-| Municipalities and drawn areas | Not tested at this scale | From 2012 |
+| National totals | Passed (median error 6.9%, margin 15%) | From 2003, national factor |
+| 16 departments | Passed (margin 30%) | From 2003, with the test error of each month |
+| 1 department (Vaupés) | Above 30%, but not in most months | From 2003, low-confidence warning |
+| 12 departments | Above 30% in most months | From 2003, low-confidence warning (failed the test) |
+| 4 departments | Too few detections to evaluate | From 2003, low-confidence warning (error unknown) |
+| Municipalities and drawn areas | Not tested at this scale | From 2003 with the factor of their department, low-confidence warning (error unknown) |
+
+**Monthly comparison:** each month is compared with the median of the same month in every other year since 2003 (VIIRS from 2012, MODIS rescaled for 2003-2011). The current month is compared with the same days in those years. The daily alert levels still use VIIRS since 2012 only.
 
 The days that come from MODIS are **estimates, not observations**. They are always hatched and labeled "MODIS rescaled to VIIRS units (estimated)", with the test error of that month.
 
@@ -95,7 +100,7 @@ For each place and day, the hot spots of that day and the 6 days before it are a
 - A window with 4 or more no-data days is not rated (confirmed default).
 - **Alerts use VIIRS from 2012 only.** The MODIS era has its own "internal anomaly", computed the same way against 2003-2011 only. It is never shown as a current alert or compared with the VIIRS levels.
 
-**Month against its history.** Each month is compared with the median of the same month in the other years since 2012, as a ratio ("2.3x normal") and a percentile. The current, unfinished month is compared with the same days of that month in the other years, never with whole months.
+**Month against its history.** Each month is compared with the median of the same month in the other years since 2003, as a ratio ("2.3x normal") and a percentile. 2003-2011 come from MODIS rescaled to VIIRS units (since November 15, 2026; `docs/HARMONIZATION.md` Part 5), using only windows that end before 2012-01-20. The median, not the average, so one extreme year does not hide unusual activity. The current, unfinished month is compared with the same days of that month in the other years, never with whole months.
 
 ## 8. Drawn areas
 

@@ -96,8 +96,8 @@ export function MethodPage({ harm }: { harm: Harmonization | null }) {
             { t: 'Local date', d: 'Every detection is moved to Colombian time (UTC-5) before it is assigned to a day. Day and night passes are used together.' },
             { t: 'Count hot spots', d: 'The calendar counts accepted detections ("hot spots") per municipality and day. Active 1 km cells (a 0.01° grid) are kept as a second figure. A test chose between the two: see section 2.' },
             { t: 'One reference sensor', d: 'VIIRS S-NPP since 2012. On days S-NPP has no data, NOAA-20 (same orbit) fills in and the day is flagged. Sensors are never summed on the same day.' },
-            { t: 'Rescale MODIS', d: 'For 2003–2011, MODIS hot spots are converted to VIIRS-equivalent units with one factor per calendar month. These days are estimates and are always hatched.' },
-            { t: 'Compare with itself', d: 'Each place is compared with its own history in the same season. Alerts use VIIRS since 2012 only; the MODIS era has its own internal anomaly.' },
+            { t: 'Rescale MODIS', d: 'For 2003–2011, MODIS hot spots are converted to VIIRS-equivalent units with one factor per calendar month, adjusted to the level of each department. These days are estimates and are always hatched.' },
+            { t: 'Compare with itself', d: 'Each place is compared with its own history. Months are compared with the same month since 2003. Daily alerts use VIIRS since 2012 only; the MODIS era has its own internal anomaly.' },
           ].map((s, i) => (
             <div key={s.t} className="step">
               <div className="step-n">{String(i + 1).padStart(2, '0')}</div>
@@ -117,6 +117,9 @@ export function MethodPage({ harm }: { harm: Harmonization | null }) {
         </p>
         <ul className="bullets">
           <li><b>One factor per calendar month</b>, at national scale, from the years when both sensors overlap (2013–2025). The factor is the VIIRS S-NPP total of that month divided by the MODIS total.</li>
+          {harm?.department_version === 2 && (
+            <li><b>Adjusted to each department.</b> The ratio between the sensors is not the same everywhere: in the eastern plains VIIRS sees about 3.6–3.9 times what MODIS sees, in Bolívar or Magdalena more than 5 times. Each department's factor is the national monthly factor times its own level (its VIIRS/MODIS ratio over 2013–2025, divided by the national one). Departments with fewer than 100 detections keep the national factor. The national totals keep the national factor.</li>
+          )}
           <li><b>2003–2011</b> are MODIS multiplied by that factor. 2000–2002 are excluded: a single satellite and incomplete data.</li>
           <li><b>From 2012</b> the calendar shows what VIIRS observed. Nothing is rescaled there.</li>
         </ul>
@@ -133,14 +136,19 @@ export function MethodPage({ harm }: { harm: Harmonization | null }) {
             <ul className="bullets">
               <li><b>National: passed.</b> Median error {harm.national_error_all_months_pct.toFixed(1)}% over 156 withheld months, and the worst calendar month is {Math.max(...harm.national_error_pct).toFixed(1)}%, just under the margin.</li>
               <li><b>Hot spots or 1 km cells?</b> Both were tested with the same margins. Hot spots had the lower error (6.9% against 8.3%), so they are the harmonized quantity.</li>
-              <li><b>Departments: {counts.ok} of 33 passed</b>, {counts.low_confidence} is shown as low confidence, {counts.viirs_only} failed in most months and {counts.insufficient} have too few detections to evaluate. A national factor works where most of the burning happens (Vichada, Meta, Caquetá, Casanare, Cesar) and fails where MODIS and VIIRS relate differently, such as Bolívar and Magdalena.</li>
+              {harm.department_version === 2 ? (
+                <li><b>Departments: {counts.ok} of 33 passed</b>, {counts.low_confidence} is shown as low confidence, {counts.viirs_only} failed in most months and {counts.insufficient} have too few detections to evaluate. A first version with the national factor alone passed in 14 and showed 15; the department level was written down and tested the same way, and it was adopted because a rule fixed in advance said so (more departments shown from 2003). Bolívar improved but still fails; Caquetá passed with the national factor and does not with its own level.</li>
+              ) : (
+                <li><b>Departments: {counts.ok} of 33 passed</b>, {counts.low_confidence} is shown as low confidence, {counts.viirs_only} failed in most months and {counts.insufficient} have too few detections to evaluate. A national factor works where most of the burning happens (Vichada, Meta, Caquetá, Casanare, Cesar) and fails where MODIS and VIIRS relate differently, such as Bolívar and Magdalena.</li>
+              )}
             </ul>
             <h3>What you see as a result</h3>
             <ul className="bullets">
-              <li>Departments that passed show <b>one calendar from 2003</b>. The MODIS-era days are hatched and labeled "MODIS rescaled to VIIRS units (estimated)", with the typical test error for that month.</li>
-              <li>Departments that failed start in <b>2012</b>. Their MODIS data stay in the "MODIS, raw" view, not rescaled.</li>
-              <li><b>Municipalities and drawn areas start in 2012.</b> The rule was not tested at that scale, so nothing is rescaled there.</li>
-              <li>The national totals per year go back to 2003 on the home view.</li>
+              <li><b>Every area shows one calendar from 2003</b>, as the challenge asks. The MODIS-era days are always hatched and labeled "MODIS rescaled to VIIRS units (estimated)".</li>
+              <li>Departments that passed show the typical test error of each month.</li>
+              <li><b>Low confidence, with a visible warning:</b> departments that failed the test (estimated error above 30% in most months) or have too few detections to test, and every municipality and drawn area, which use the factor of their department and were never tested at that scale. Until November 15 these started in 2012; the team chose to show them with the warning so that every area answers the challenge from 2003.</li>
+              <li>The national totals per year go back to 2003 on the home view, with the national factor.</li>
+              <li>The month is compared with the same month in <b>every other year since 2003</b>: VIIRS from 2012, MODIS rescaled before.</li>
               <li>Anomalies in the MODIS era are computed against that era only (2003–2011) and are never mixed with current alerts.</li>
             </ul>
             <div className="notice-card">
@@ -163,7 +171,7 @@ export function MethodPage({ harm }: { harm: Harmonization | null }) {
             <li>At least <b>3 hot spots</b> are needed to call a week unusual or extreme.</li>
             <li>If a municipality had fewer than <b>10 active days</b> in its baseline season, its history is too short: the calendar shows the department level instead and says so.</li>
             <li>A window with 4 or more no-data days is not rated.</li>
-            <li>The month is compared with the <b>median of the same month</b> in other years ("2.3× normal") and its percentile. The current, unfinished month is compared with the <b>same days</b> of that month in the other years (for example days 1–13), never with whole months.</li>
+            <li>The month is compared with the <b>median of the same month</b> in the other years since 2003 ("2.3× normal") and its percentile; 2003–2011 come from MODIS rescaled to VIIRS units. We use the median, not the average, so one extreme year does not hide unusual activity. The current, unfinished month is compared with the <b>same days</b> of that month in the other years (for example days 1–13), never with whole months.</li>
           </ul>
         </div>
         <div>

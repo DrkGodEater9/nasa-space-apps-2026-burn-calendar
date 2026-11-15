@@ -45,7 +45,7 @@ export function Icon({ name, size = 16, className }: { name: string; size?: numb
   );
 }
 
-/** Project mark: a calendar grid with one cell burning. Original artwork, not an agency logo. */
+/** Project mark: a calendar grid with one cell burning. AI-generated (drawn in SVG code by Claude Code), not an agency logo. */
 export function Logo({ size = 30 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 32 32" aria-hidden="true">

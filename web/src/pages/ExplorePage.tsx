@@ -12,7 +12,7 @@ import {
 import {
   areaBounds, areaFromKey, bboxPolygon, departmentArea, municipalityArea, pointArea, shapeArea,
 } from '../lib/geo.ts';
-import { dayParts, dayToISO, formatDay, isValidIso, isoToDay, monthIndexOfDay, ymdToDay } from '../lib/dates.ts';
+import { clampDay, dayParts, dayToISO, formatDay, isValidIso, isoToDay, monthIndexOfDay, ymdToDay } from '../lib/dates.ts';
 import { imageryForDay } from '../lib/imagery.ts';
 import { dailyCsv, memberCsv, monthlyCsv, pointsCsv } from '../lib/csv-exporter.ts';
 import { fmtInt } from '../lib/format.ts';
@@ -45,9 +45,11 @@ export function ExplorePage({ boot, params, onParams }: Props) {
   const [range, setRange] = useState<[number, number]>(() => {
     const f = params.get('from');
     const t = params.get('to');
-    const a = f && isValidIso(f) ? isoToDay(f) : ymdToDay(endYear - 2, 0, 1);
-    const b = t && isValidIso(t) ? isoToDay(t) : refEnd;
-    return [Math.max(0, Math.min(a, b)), Math.min(refEnd, Math.max(a, b))];
+    // Each date is clamped into the data range before ordering, so a hand-edited URL with both dates
+    // outside the range (or in the wrong order) still gives a valid range.
+    const a = clampDay(f && isValidIso(f) ? isoToDay(f) : ymdToDay(endYear - 2, 0, 1), 0, refEnd);
+    const b = clampDay(t && isValidIso(t) ? isoToDay(t) : refEnd, 0, refEnd);
+    return [Math.min(a, b), Math.max(a, b)];
   });
   const [focusDay, setFocusDay] = useState<number>(() => {
     const d = params.get('day');
@@ -106,8 +108,15 @@ export function ExplorePage({ boot, params, onParams }: Props) {
   const natMonthly = useMemo(() => nationalMonthly(national, ctx), [national, ctx]);
   const imagery = useMemo(() => imageryForDay(focusDay, ctx), [focusDay, ctx]);
 
+  // If the chosen sensor starts after the selected range (e.g. NOAA-21 with dates before 2023), move the range
+  // to that sensor's full record instead of leaving an empty, inverted view.
+  // Only once the area is loaded: before that the MODIS era is unknown and minDay would be 2012.
+  useEffect(() => {
+    if (series && range[1] < minDay) setRange([minDay, refEnd]);
+  }, [series, minDay, range, refEnd]);
+
   const [from, to] = range;
-  const viewFrom = Math.max(from, minDay);
+  const viewFrom = Math.min(Math.max(from, minDay), Math.max(to, minDay));
 
   const summary: RangeSummary | null = useMemo(() => {
     if (!series) return null;
@@ -361,7 +370,7 @@ export function ExplorePage({ boot, params, onParams }: Props) {
                   </Card>
                 )}
 
-                <Card title="This month vs. normal" icon="chart" sub="Monthly hot spots in the selected dates against the median of the same month in the other years since 2012 (VIIRS reference). The MODIS era is not part of this baseline.">
+                <Card title="This month vs. normal" icon="chart" sub="Monthly hot spots in the selected dates against the median of the same month in the other years since 2003: VIIRS from 2012, MODIS rescaled to VIIRS units (estimated) for 2003–2011.">
                   <MonthHeadline row={headlineMonth} partial={partialMonth} />
                   {rangeMonths.length > 1 && <MonthlyChart rows={rangeMonths} />}
                 </Card>

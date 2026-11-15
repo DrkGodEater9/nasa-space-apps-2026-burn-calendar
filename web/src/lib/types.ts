@@ -24,7 +24,12 @@ export interface Harmonization {
   national_error_pct: number[];
   national_error_all_months_pct: number;
   modis_no_data_days: string[];
-  departments: Record<string, { status: HarmonizationStatus; error_pct: (number | null)[] }>;
+  /** 1 = factor per month only; 2 = factor per month times the department level (docs/HARMONIZATION.md, Part 3). */
+  department_version?: number;
+  /** "all_areas" since November 15, 2026: every area shows the MODIS era, with warnings (HARMONIZATION.md Part 5). */
+  era_scope?: string;
+  /** level: the department factor is factors[m] * level (1 in version 1 or with little data). */
+  departments: Record<string, { status: HarmonizationStatus; level?: number; error_pct: (number | null)[] }>;
   notice: string;
 }
 
@@ -130,7 +135,7 @@ export interface NationalFile {
   departments: Unit[];
   alerts: AlertBlock;
   monthly: MonthlyBlock;
-  /** Internal anomalies of the MODIS era, only for departments that passed the harmonization test. */
+  /** Internal anomalies of the MODIS era, for every department with MODIS data. */
   alerts_modis_era?: AlertBlock | null;
 }
 

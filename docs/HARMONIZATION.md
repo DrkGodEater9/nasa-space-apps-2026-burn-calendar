@@ -102,9 +102,9 @@ With detections:
 
 1. **Quantity: detections ("hot spots").** Active cells remain as a second figure.
 2. **Departments above 30% in most months: VIIRS from 2012 only**, as the rule says.
-3. **Municipalities and drawn areas: never rescaled,** because the rule was not tested at that scale.
+3. **Municipalities and drawn areas: never rescaled,** because the rule was not tested at that scale. *Replaced on November 15 by Part 5: shown with the factor of their department and a low-confidence warning.* Decision 2 was replaced the same way.
 
-So the single calendar from 2003 exists for the national totals and for 15 departments (74% of the national activity).
+So the single calendar from 2003 exists for the national totals and for 15 departments (74% of the national activity). *Superseded on November 15 by version 2 (Parts 3 and 4): 17 departments.*
 
 ### What this does and does not show
 
@@ -116,6 +116,88 @@ So the single calendar from 2003 exists for the national totals and for 15 depar
 ### Where it is used
 
 - `scripts/build_dataset.py` runs this test on every build and uses the rule only if the national test passes. If it ever fails, the sensors stay separate.
-- `data/processed/harmonization.json` holds the factors, the test error per month and the status of each department.
+- `data/processed/harmonization.json` holds the factors, the test error per month and the status and level of each department.
 - The web app draws the MODIS-era days hatched, with the test error of that month.
 - `scripts/check_dataset.py` and `npm run verify` check that the rule is applied only where it passed.
+
+---
+
+## Part 3. Department factor (version 2): fixed before the test
+
+**Written on 2026-11-15 at 11:59 (Colombia time), before any version 2 test error was computed.** The team chose the method. At that point only the version 1 results above, and the descriptive department ratios in Part 2, had been seen. The numbers in this part were not changed afterwards.
+
+**Why.** The national factor fails in departments where VIIRS and MODIS relate differently (Part 2). Version 2 gives each department its own level and keeps the national monthly shape.
+
+### The rule (changes from Part 1 only)
+
+1. **Factor of department d in calendar month m:** `f[d,m] = f_nat[m] × (R_d / R_nat)`.
+   - `f_nat[m]` is the national factor of Part 1.
+   - `R_d` = S-NPP total of department d over all months of the training years / MODIS total of department d over the same months (a ratio of totals).
+   - `R_nat` is the same ratio for the whole country.
+2. **Departments with little data keep the national factor:** if the training years hold fewer than **100** MODIS detections or fewer than **100** S-NPP detections in the department, then `f[d,m] = f_nat[m]`.
+3. **National series:** unchanged. The national total keeps the national factor, and the national criterion (15%, both readings) is unchanged.
+4. **Quantity:** detections, as decided on November 14. Active cells are computed and reported only.
+5. **Municipalities and drawn areas:** still never rescaled. *(Replaced later the same day by Part 5.)*
+
+### The test
+
+The same leave-one-year-out test as Part 1. For each withheld year, `f_nat`, `R_d` and `R_nat` are all recomputed with the other twelve years only. The department margin (30%), the minimum of 30 S-NPP detections per department-month, the reading of "most months" and the three statuses (`ok`, `low_confidence`, `viirs_only`) are unchanged.
+
+### Which version is used
+
+- Version 2 applies to **every** department or to none. There is no choosing per department whichever version gave the lower error.
+- **Version 2 replaces version 1 only if it shows more departments from 2003** (status `ok` plus `low_confidence`) than version 1 (15). On a tie or fewer, version 1 stays.
+- Both results are reported here, whichever wins.
+
+## Part 4. Version 2 results
+
+Same national test (unchanged, passes). Department criterion, margin 30%:
+
+| | Cells v1 | Cells v2 | Detections v1 | Detections v2 |
+|---|---:|---:|---:|---:|
+| Department-months within 30% | 44.7% | 55.6% | 50.5% | 57.1% |
+| Median department-month error | 34.0% | 25.5% | 29.7% | 24.8% |
+| Within the margin (`ok`) | 10 | 13 | 14 | 16 |
+| Low confidence | 1 | 0 | 1 | 1 |
+| Above 30% in most months | 18 | 16 | 14 | 12 |
+| Too few detections | 4 | 4 | 4 | 4 |
+| **Shown from 2003** | 11 | 13 | **15** | **17** |
+
+**Decision by the rule of Part 3: version 2 is used** (17 departments shown from 2003 against 15, with detections).
+
+With detections, version 2:
+- **Within the margin (16):** Antioquia, Arauca, Casanare, Cesar, Chocó, Córdoba, Guainía, Guaviare, La Guajira, Magdalena, Meta, Norte de Santander, Tolima, Valle del Cauca, Amazonas, Vichada.
+- **Low confidence (1):** Vaupés.
+- **Above 30% in most months (12):** Atlántico, Bolívar, Boyacá, Caldas, Caquetá, Cauca, Cundinamarca, Huila, Nariño, Putumayo, Santander, Sucre.
+- **Too few detections (4):** Bogotá, Quindío, Risaralda, San Andrés.
+
+**What changed, department by department:**
+- **Gained (5):** Magdalena (30.1% → 22.8%), Tolima (38.1% → 27.8%), Valle del Cauca (37.5% → 25.2%), Amazonas (33.8% → 29.5%) and Vaupés (39.1% → 32.9%, low confidence).
+- **Lost (3):** Caquetá (27.9% → 32.7%, now above 30% in 10 of 12 months), Caldas (23.0% → 41.8%, only 6 evaluable calendar months) and Huila (low confidence → above 30% in 8 of 11 months).
+- **Still failing:** Bolívar improves (44.0% → 30.4%) but stays above 30% in 7 of 12 months. Nariño gets worse (42.1% → 55.4%) on few evaluable months (7 calendar months).
+- **Caquetá is the costliest loss.** It holds 6.8% of the S-NPP detections of 2013-2025. Its level (0.86) lowers its factor, and the test says that does not predict it better than the national factor. The rule of Part 3 does not allow keeping version 1 for Caquetá alone.
+
+**Share of activity covered.** The departments shown from 2003 hold about the same share of the S-NPP detections of 2013-2025 in both versions: 78.0% in version 1 and 77.6% in version 2. Version 2 shows more departments, not more fire activity. (The 74.3% of Part 2 could not be reproduced from the processed tables with any of the definitions tried. The figure above is the share of S-NPP detections, 2013-2025.)
+
+Per-department detail of both versions: `data/processed/harmonization_version_comparison.csv`.
+
+**How much better any factor could do (diagnostic only, not used).** After version 2, two "oracle" factors were computed that know the year being predicted, so no honest method can beat them. A factor per department and month fitted on all 13 years, including the predicted one, gives a median department-month error of 20.7% and 25 departments shown. A perfect factor per department and year gives 23.0% and 22. So about 20% is the noise floor between the two sensors at department and month scale (clouds, overpass times, small fires seen by one sensor and not the other), and an honest method would add at most a few departments to version 2. Boyacá, Nariño, Sucre and Vaupés stay above 30% even with the first oracle. The ratio VIIRS/MODIS varies about 4% from year to year in Meta and Vichada, against 14% in Bolívar and 30% in Nariño. No third version was tested.
+
+---
+
+## Part 5. Every area from 2003: team decision after the results (November 15, 2026)
+
+**This is a change of what is shown, taken after the results were known.** The method (version 2) and the test are unchanged.
+
+**Why.** The challenge asks for one calendar from the early 2000s to today on the harmonized dataset, for the region the user chooses, and for the current month compared with the historical median of that area. Until this decision only 17 departments and the national totals had it. The team chose to show it everywhere and to say clearly, area by area, how far the estimate was tested.
+
+**What changes:**
+1. **Every area shows the MODIS era (2003-01-01 to 2012-01-19)** inside the single calendar, always hatched and labeled as an estimate.
+   - Departments `ok`: as before, with the test error of each month.
+   - Departments `low_confidence`, `viirs_only` (failed the test) and `insufficient`: shown with a visible **low-confidence warning**. The failed ones show their test error (above 30% in most months); the insufficient ones say the error is unknown.
+   - Municipalities and drawn areas: each municipality uses the factor of its department (`factor[m] × level`). Shown with the warning **"not tested at this scale: the error is unknown"**. This replaces the decision of November 14, "municipalities and drawn areas: never rescaled".
+2. **Monthly comparison from 2003.** The month is compared with the same month (or, for the current unfinished month, the same days) in every other year since 2003: VIIRS from 2012, MODIS rescaled for 2003-2011. Only windows that lie entirely before 2012-01-20 are taken from the MODIS era, so no window mixes the two sensors. MODIS no-data days count as zero, as VIIRS no-data days do.
+3. **Internal anomalies of the MODIS era** are computed for every department with MODIS data, not only those that passed. Municipalities and drawn areas have none.
+4. **Unchanged:** the daily alert levels (unusual, extreme) use VIIRS since 2012 only. The national series keeps the national factor. Different satellites are never summed on the same day.
+
+**What this costs.** In departments that failed and at municipality scale, the 2003-2011 estimates and the medians that use them can be off by more than 30%, and at municipality scale nobody knows by how much. The warnings say so where the numbers are shown. The test results of Parts 2 and 4 stay as they were: this decision does not make any department pass.

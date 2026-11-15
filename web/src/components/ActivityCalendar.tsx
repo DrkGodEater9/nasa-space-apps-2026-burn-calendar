@@ -2,8 +2,8 @@
 // Year-by-year activity calendar (weeks as columns, Monday to Sunday as rows). States follow
 // docs/METHOD.md section 5: zero = light base color, no data = striped gray, detections = color
 // scale. NOAA-20 fill days carry a small marker. Anomaly levels can replace the color scale.
-// Single calendar: for departments that passed the harmonization test, the days before the VIIRS
-// reference are MODIS rescaled to VIIRS units. They are estimates and are always hatched.
+// Single calendar: for every area, the days before the VIIRS reference are MODIS rescaled to VIIRS
+// units (HARMONIZATION.md Part 5). They are estimates and are always hatched.
 
 import { memo, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from 'react';
 import type { AreaSeries, RefContext } from '../lib/analysis.ts';
@@ -323,16 +323,23 @@ function CalendarTip(p: Props & { tip: Tip; width: number }) {
         )}
         <div className="tip-row">MODIS rescaled to VIIRS units (estimated)</div>
         <div className="tip-row muted">
-          {series.modis[day] ?? 0} MODIS hot spots × {fmtNum(ctx.harm?.factors[month] ?? 0)} ({MONTHS_LONG[month]} factor)
+          {era.factorLevel !== null
+            ? <>{series.modis[day] ?? 0} MODIS hot spots × {fmtNum((ctx.harm?.factors[month] ?? 0) * era.factorLevel)} ({MONTHS_LONG[month]} factor{era.factorLevel !== 1 ? ' for this department' : ''})</>
+            : <>{series.modis[day] ?? 0} MODIS hot spots × the {MONTHS_LONG[month]} factor of each department</>}
         </div>
-        <div className="tip-row muted">
-          {err === null || err === undefined
-            ? `Test error for ${MONTHS_LONG[month]} here: not evaluable (too few detections)`
-            : `Typical test error for ${MONTHS_LONG[month]} here: ±${Math.round(err)}%`}
+        <div className={`tip-row${era.status === 'ok' ? ' muted' : ' warn'}`}>
+          {era.status === 'not_tested'
+            ? 'Not tested at this scale: the error is unknown'
+            : era.status === 'insufficient'
+              ? 'Too few detections to test here: the error is unknown'
+              : err === null || err === undefined
+                ? `Test error for ${MONTHS_LONG[month]} here: not evaluable (too few detections)`
+                : `Typical test error for ${MONTHS_LONG[month]} here: ±${Math.round(err)}%`}
         </div>
         <div className="tip-row">
           <span className="dot" style={{ background: levelInfo(el).color }} />
-          {el < 0 ? 'No activity in the last 7 days' : `Internal anomaly of the MODIS era: ${levelInfo(el).label}`}
+          {!era.hasLevels ? 'MODIS-era anomaly: computed for departments only'
+            : el < 0 ? 'No activity in the last 7 days' : `Internal anomaly of the MODIS era: ${levelInfo(el).label}`}
         </div>
         <div className="tip-row muted">7-day total ≈ {fmtInt(Math.round(era.est7[day]))} · compared with 2003–2011 only, no current alert</div>
         <div className="tip-foot">Click to inspect this day</div>

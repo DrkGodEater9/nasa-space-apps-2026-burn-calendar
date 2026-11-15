@@ -57,7 +57,7 @@ export default function App() {
         <Icon name="info" size={14} />
         <span>
           <b>Hot spot</b> = thermal anomaly detected by satellite, not a confirmed fire. Cloud cover can hide fires: a zero does not
-          guarantee absence of fire. Data from different satellites are not summed.
+          guarantee absence of fire. Data from different satellites are never summed on the same day.
         </span>
       </div>
 

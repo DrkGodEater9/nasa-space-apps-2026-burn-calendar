@@ -293,7 +293,34 @@ def anomalies(keys, X: np.ndarray, S: np.ndarray, dates: pd.DatetimeIndex, id_co
     return pd.concat(pieces, ignore_index=True) if pieces else pd.DataFrame()
 
 
-def monthly(keys, X: np.ndarray, dates: pd.DatetimeIndex, nodata: np.ndarray, id_col: str) -> pd.DataFrame:
+def era_matrix(modis: pd.DataFrame, key: str, keys: list, era_dates: pd.DatetimeIndex) -> np.ndarray:
+    """MODIS rescaled to VIIRS units per key and day of the MODIS era, in float64, rows in the order of `keys`
+    (zeros where a key has no MODIS detections, including MODIS no-data days)."""
+    g = modis.groupby([key, "date"])["estimated"].sum()
+    E = np.zeros((len(keys), len(era_dates)), np.float64)
+    ki = {k: i for i, k in enumerate(keys)}
+    di = pd.Series(np.arange(len(era_dates)), index=era_dates)
+    idx = g.index.to_frame(index=False)
+    ok = idx[key].isin(ki).to_numpy()
+    E[idx.loc[ok, key].map(ki).to_numpy(), di.reindex(idx.loc[ok, "date"]).to_numpy()] = g.to_numpy()[ok]
+    return E
+
+
+def era_window_sums(E: np.ndarray, era_dates: pd.DatetimeIndex, year: int, month: int, d1: int | None, d2: int | None):
+    """Sum of the estimated series over one month of the MODIS era (whole month, or days d1..d2), or None
+    when the window is not entirely inside the era (never mixes MODIS and VIIRS)."""
+    first = pd.Timestamp(year, month, 1)
+    dim = first.days_in_month
+    start = first if d1 is None else pd.Timestamp(year, month, d1)
+    end = pd.Timestamp(year, month, dim if d2 is None else min(d2, dim))
+    if start < era_dates[0] or end > era_dates[-1]:
+        return None
+    a, b = (start - era_dates[0]).days, (end - era_dates[0]).days
+    return E[:, a:b + 1].sum(axis=1)
+
+
+def monthly(keys, X: np.ndarray, dates: pd.DatetimeIndex, nodata: np.ndarray, id_col: str,
+            era: np.ndarray | None = None, era_dates: pd.DatetimeIndex | None = None) -> pd.DataFrame:
     z = pd.DataFrame(np.nan_to_num(X).T, index=dates, columns=keys)
     per = z.index.to_period("M")
     cell_days = z.groupby(per).sum()
@@ -329,6 +356,20 @@ def monthly(keys, X: np.ndarray, dates: pd.DatetimeIndex, nodata: np.ndarray, id
                 rows.append(z.loc[start:end].sum().to_numpy())
                 others.append(q)
             base = np.vstack(rows) if rows else None
+        if era is not None:
+            # The same month (or the same days of it) in the MODIS-era years, estimated (Part 5).
+            d1 = None if complete[p] else int(first_day[p])
+            d2 = None if complete[p] else int(last_day[p])
+            extra = []
+            for y in range(era_dates[0].year, era_dates[-1].year + 1):
+                if y == p.year:
+                    continue
+                s = era_window_sums(era, era_dates, y, p.month, d1, d2)
+                if s is not None:
+                    extra.append(s)
+                    others.append(pd.Period(year=y, month=p.month, freq="M"))
+            if extra:
+                base = np.vstack(([base] if base is not None else []) + extra)
         hist_n[p] = len(others)
         if base is None:
             continue
@@ -471,8 +512,6 @@ def main() -> None:
     log(f"municipality anomalies: {len(an_m):,} rows")
     an_d = anomalies(dkeys, DX, rolling_sum(DX, nodata), dates, "dpto_code")
     log(f"department anomalies: {len(an_d):,} rows")
-    mo_m = monthly(mkeys, MX, dates, nodata, "mpio_code")
-    mo_d = monthly(dkeys, DX, dates, nodata, "dpto_code")
     val = validation_table(con, mp)
 
     # --- harmonization of the MODIS era (team rule and test: docs/HARMONIZATION.md)
@@ -482,6 +521,7 @@ def main() -> None:
     fac = res[ht_key]["factors"].set_index("month")
     factor = fac["factor"]
     dept_status = res[ht_key]["departments"].set_index("dpto_code")["status"]
+    dept_level = res[ht_key]["departments"].set_index("dpto_code")["level"]   # 1.0 everywhere in version 1
     accepted = bool(hsum["national_pass"])           # if the national test fails, the sensors stay separate
     era_end = dates[0] - pd.Timedelta(days=1)        # the day before the VIIRS reference series starts
     era_dates = pd.date_range(MODIS_FIRST_DATE, era_end, freq="D")
@@ -489,15 +529,25 @@ def main() -> None:
                  .reindex(era_dates, fill_value=False).to_numpy())
     modis_nodata = ~modis_has
     an_modis = pd.DataFrame()
+    era_m = era_d = None
     if accepted:
-        modis = daily[(daily["sensor"] == "MODIS_C61") & (daily["date"] <= era_end)].copy()
-        modis["estimated"] = modis[QUANTITY] * modis["date"].dt.month.map(factor)
+        # Since November 15, 2026 every area shows the MODIS era (team decision, docs/HARMONIZATION.md Part 5):
+        # each municipality uses the factor of its department, with a warning where it was not tested or failed.
+        modis = daily[(daily["sensor"] == "MODIS_C61") & (daily["date"] >= MODIS_FIRST_DATE)
+                      & (daily["date"] <= era_end)].copy()
         modis["dpto_code"] = modis["mpio_code"].str[:2]
-        shown = (modis[modis["dpto_code"].map(dept_status).isin(SHOW_RESCALED)]
-                 .groupby(["dpto_code", "date"], as_index=False)["estimated"].sum())
+        modis["estimated"] = (modis[QUANTITY] * modis["date"].dt.month.map(factor)
+                              * modis["dpto_code"].map(dept_level).fillna(1.0))
+        shown = modis.groupby(["dpto_code", "date"], as_index=False)["estimated"].sum()
         ekeys, EX = build_matrix(shown, "dpto_code", era_dates, modis_nodata, "estimated")
         # "Internal anomaly of the MODIS era": the same windows and percentiles, against 2003-2011 only.
         an_modis = anomalies(ekeys, EX, rolling_sum(EX, modis_nodata), era_dates, "dpto_code", as_int=False)
+        # Estimated daily series (float64) for the monthly history, aligned with the reference matrices.
+        era_m = era_matrix(modis, "mpio_code", mkeys, era_dates)
+        era_d = era_matrix(modis, "dpto_code", dkeys, era_dates)
+    # Monthly comparison: the same month in every other year, 2003-2011 estimated from MODIS (Part 5).
+    mo_m = monthly(mkeys, MX, dates, nodata, "mpio_code", era=era_m, era_dates=era_dates)
+    mo_d = monthly(dkeys, DX, dates, nodata, "dpto_code", era=era_d, era_dates=era_dates)
     band = res[ht_key]["band"]
 
     def month_errors(code: str) -> list:
@@ -509,15 +559,22 @@ def main() -> None:
                    "See docs/HARMONIZATION.md.",
         "accepted": accepted, "quantity": QUANTITY, "overlap_years": [ht.YEARS[0], ht.YEARS[-1]],
         "modis_era": [MODIS_FIRST_DATE, str(era_end.date())],
+        "department_version": int(res["version"]),
+        # Team decision of November 15, 2026 (docs/HARMONIZATION.md Part 5): every area shows the MODIS era and
+        # the monthly history includes 2003-2011. Departments with a status other than ok, municipalities and
+        # drawn areas carry a low-confidence warning.
+        "era_scope": "all_areas",
         "factors": [round(float(factor[m]), 4) for m in range(1, 13)],
         "national_error_pct": [float(fac.loc[m, "test_median_abs_error_pct"]) for m in range(1, 13)],
         "national_error_all_months_pct": hsum["h1_median_over_156_year_months_pct"],
         "modis_no_data_days": [str(d.date()) for d in era_dates[modis_nodata]],
-        "departments": {code: {"status": st, "error_pct": month_errors(code)} for code, st in dept_status.items()},
+        # level: the department factor is factors[m] * level (docs/HARMONIZATION.md, Part 3)
+        "departments": {code: {"status": st, "level": float(dept_level[code]), "error_pct": month_errors(code)}
+                        for code, st in dept_status.items()},
     }
     (OUT / "harmonization.json").write_text(json.dumps(harmonization, indent=2), encoding="utf-8")
-    log(f"harmonization: accepted={accepted}, quantity={QUANTITY}, departments shown rescaled: "
-        f"{int(dept_status.isin(SHOW_RESCALED).sum())}, MODIS-era anomaly rows: {len(an_modis):,}, "
+    log(f"harmonization: accepted={accepted}, quantity={QUANTITY}, departments that passed the test: "
+        f"{int(dept_status.isin(SHOW_RESCALED).sum())} (MODIS era shown for all areas), MODIS-era anomaly rows: {len(an_modis):,}, "
         f"MODIS no-data days in the era: {int(modis_nodata.sum())}")
 
     # --- write full tables

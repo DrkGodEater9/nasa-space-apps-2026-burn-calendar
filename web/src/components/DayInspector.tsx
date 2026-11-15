@@ -55,10 +55,21 @@ export function DayInspector(p: Props) {
           </div>
           <div>
             <div className="di-label">Level</div>
-            <div className="di-val"><span className="level-pill" style={{ background: li.color, color: li.text }}>{li.label}</span></div>
+            <div className="di-val">{era && !era.hasLevels ? '—' : <span className="level-pill" style={{ background: li.color, color: li.text }}>{li.label}</span>}</div>
           </div>
         </div>
-        {era && <div className="di-note">MODIS rescaled to VIIRS units (estimated). The level is the internal anomaly of the MODIS era (2003–2011), not a current alert.</div>}
+        {era && (
+          <div className="di-note">
+            MODIS rescaled to VIIRS units (estimated).{' '}
+            {era.hasLevels
+              ? 'The level is the internal anomaly of the MODIS era (2003–2011), not a current alert.'
+              : 'MODIS-era anomaly levels are computed for departments only.'}
+            {era.status === 'not_tested' ? ' Low confidence: not tested at this scale.'
+              : era.status === 'viirs_only' ? ' Low confidence: this department failed the harmonization test.'
+              : era.status === 'insufficient' ? ' Low confidence: too few detections to test.'
+              : era.status === 'low_confidence' ? ' Low confidence: estimated error above 30%.' : ''}
+          </div>
+        )}
         {!era && s.fallback[i] ? <div className="di-note">Municipal history is too short this season; department level shown.</div> : null}
         {contributors.length > 1 && (
           <div className="di-contrib">
