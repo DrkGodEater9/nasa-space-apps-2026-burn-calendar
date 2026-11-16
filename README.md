@@ -97,6 +97,9 @@ Every external source, library and service is listed in [REFERENCES.md](REFERENC
 - **DANE:** the 2018 department and municipality boundaries (Marco Geoestadístico Nacional).
 - **IDEAM:** the semester hot spot reports of 2023 and 2024, used only for validation.
 - **Basemap:** CARTO Dark Matter, with data from OpenStreetMap contributors.
+- **Web app:** [React](https://react.dev/), [Vite](https://vite.dev/), [TypeScript](https://www.typescriptlang.org/), [MapLibre GL JS](https://maplibre.org/), [Turf.js](https://turfjs.org/), and the typefaces Inter, Space Grotesk and JetBrains Mono through [Fontsource](https://fontsource.org/).
+- **Data pipeline:** [pandas](https://pandas.pydata.org/), [NumPy](https://numpy.org/), [PyArrow](https://arrow.apache.org/docs/python/), [DuckDB](https://duckdb.org/), [GeoPandas](https://geopandas.org/), [Shapely](https://shapely.readthedocs.io/), [pyproj](https://pyproj4.github.io/pyproj/) and [requests](https://requests.readthedocs.io/); [Matplotlib](https://matplotlib.org/) and [Jupyter](https://jupyter.org/) for the exploration notebook; [PyMuPDF](https://pymupdf.readthedocs.io/) to read the IDEAM PDF reports.
+- **Demo video:** [Playwright](https://playwright.dev/) to record the app, [FFmpeg](https://ffmpeg.org/) to edit and caption it, and [ElevenLabs](https://elevenlabs.io/) for the narration.
 
 We acknowledge the use of data and imagery from LANCE FIRMS operated by NASA's Goddard Space Flight Center Earth Science Data and Information System (ESDIS) with funding provided by NASA Headquarters.
 

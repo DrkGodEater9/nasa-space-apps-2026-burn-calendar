@@ -21,6 +21,7 @@ Everything external to this repository is listed here. Keep this file complete: 
 - [requests](https://requests.readthedocs.io/): FIRMS API calls.
 - [Matplotlib](https://matplotlib.org/) and [Jupyter](https://jupyter.org/): the exploration notebook.
 - [PyMuPDF](https://pymupdf.readthedocs.io/): reading the IDEAM PDF reports and rendering their charts (one-off extraction, not part of the pipeline).
+- [Playwright](https://playwright.dev/) and [FFmpeg](https://ffmpeg.org/): recording the web app and editing and captioning the demo video. The narration was generated with [ElevenLabs](https://elevenlabs.io/).
 
 ## Web app
 
