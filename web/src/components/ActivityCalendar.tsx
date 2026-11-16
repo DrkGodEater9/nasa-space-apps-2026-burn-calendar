@@ -366,7 +366,7 @@ function CalendarTip(p: Props & { tip: Tip }) {
             : el < 0 ? 'No activity in the last 7 days' : `Internal anomaly of the MODIS era: ${levelInfo(el).label}`}
         </div>
         <div className="tip-row muted">7-day total ≈ {fmtInt(Math.round(era.est7[day]))} · compared with 2003–2011 only, no current alert</div>
-        <div className="tip-foot">Click to inspect this day</div>
+        <div className="tip-foot">Click the day for its details</div>
       </div>
     );
   }
@@ -401,7 +401,7 @@ function CalendarTip(p: Props & { tip: Tip }) {
       )}
       {sensor === 'modis' && <div className="tip-row muted">MODIS Collection 6.1 · raw hot spots, not rescaled</div>}
       {sensor === 'n21' && <div className="tip-row muted">VIIRS NOAA-21 · informational layer, no baseline</div>}
-      <div className="tip-foot">Click to inspect this day</div>
+      <div className="tip-foot">Click the day for its details</div>
     </div>
   );
 }
