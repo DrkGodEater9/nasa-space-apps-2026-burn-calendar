@@ -116,7 +116,8 @@ We used AI assistants to build this project, and we want to be exact about how.
 
 - **It wrote the code that carries out those decisions, almost all of it.** Claude Code (Anthropic) wrote the scripts that download, filter and aggregate the data, apply the harmonization rule, run the test and export the files, and it wrote the web application. Codex wrote the script that processes the DANE boundaries. Every AI-assisted file carries a note in its header.
 - **Claude Desktop (Anthropic)** searched for sources on the Meta-Caquetá boundary difference and computed descriptive tables from the project data.
-- **The demo video narration is an AI-generated voice** (ElevenLabs), reading a script written in English for the team. The video itself is a screen recording of the real web app, and it says on screen that the narration is AI-generated.
+- **Claude Code also produced the demo video.** It wrote the English narration script, recorded the real web app in a browser, and edited and captioned the footage with FFmpeg. The video shows the real app, not mocked-up screens.
+- **The demo video narration was generated with ElevenLabs** from that script, using the voice of one of our team members, so it is their own voice and no third-party voice is used. The video says on screen that the narration is AI-generated.
 - **No AI-generated images are used.** The site has no logo: its mark is a simple flame line icon, the same one used across the interface.
 - **It wrote the documentation** from our decisions, and translated our planning documents from Spanish to English.
 - **It ran the analysis we asked for:** the exploration of the raw data, the harmonization test, the comparison with IDEAM and the accessibility checks.

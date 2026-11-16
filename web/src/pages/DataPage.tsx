@@ -117,7 +117,8 @@ export function DataPage() {
               documentation and this web application; Claude Desktop (Anthropic) searched for sources and computed descriptive
               tables; Codex helped with the DANE boundary processing. Every AI-assisted file carries a note in its header. No
               figure was invented or estimated by AI. No AI-generated images are used: the site's mark is a plain flame icon.
-              The narration of the demo video is an AI-generated voice (ElevenLabs).
+              The demo video was produced with Claude Code (script, browser recording of this app and editing); its narration
+              was generated with ElevenLabs using the voice of one of the team members.
             </p>
           </div>
         </div>
